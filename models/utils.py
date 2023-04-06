@@ -768,8 +768,9 @@ class SimpleCenterIdxDataset(Dataset):
             
             center_masks_labels, template_labels = map(list, zip(*dataset_df['labels'].tolist()))
 
-            mask_labels = [torch.from_numpy(np.array(x)) for x in center_masks_labels]
-            mask_labels_pad = [pad_masks(x, args.max_seq_length) for x in mask_labels]
+            mask_labels = [torch.from_numpy(np.array(x)) for x in tqdm(center_masks_labels)]
+            mask_labels_pad = [pad_masks(x, args.max_seq_length) for x in tqdm(mask_labels)]
+
 
             if args.use_multiprocessing:
                 if args.multiprocessing_chunksize == -1:
