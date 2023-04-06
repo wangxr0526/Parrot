@@ -800,7 +800,11 @@ class SimpleCenterIdxDataset(Dataset):
             def check_data(tokens_ids, mask_labels):
                 flag = True
                 for tokens, mask_label in zip(tokens_ids, mask_labels):
-                    if len(tokens['input_ids']) != len(mask_label):
+                    if len(tokens['input_ids']) != len(mask_label.tolist()):
+                        print(tokens['input_ids'])
+                        print(mask_label.tolist())
+                        print(len(tokens['input_ids']))
+                        print(len(mask_label.tolist()))
                         flag = False
                         return flag
                 return flag
