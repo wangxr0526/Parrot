@@ -788,7 +788,7 @@ class SimpleCenterIdxDataset(Dataset):
                     )
 
             else:
-                self.examples = [encode(line) for line in lines]
+                self.examples = [encode(line) for line in tqdm(lines, total=len(lines))]
 
             mask_labels_pad = torch.stack(mask_labels_pad)
             # self.examples = [
@@ -799,7 +799,7 @@ class SimpleCenterIdxDataset(Dataset):
 
             def check_data(tokens_ids, mask_labels):
                 flag = True
-                for tokens, mask_label in zip(tokens_ids, mask_labels):
+                for tokens, mask_label in tqdm(zip(tokens_ids, mask_labels)):
                     if len(tokens['input_ids']) != len(mask_label.tolist()):
                         print(tokens['input_ids'])
                         print(mask_label.tolist())
