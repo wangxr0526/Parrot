@@ -7,7 +7,6 @@ import pickle
 import uuid
 
 import numpy as np
-import matplotlib.pyplot as plt
 from matplotlib.pyplot import MultipleLocator
 import torch
 import seaborn as sns
@@ -429,8 +428,8 @@ class ConditionWithTempDataset(Dataset):
 
 
 def encode(data):
-    tokenizer, line = data
-    return tokenizer.encode(line)
+    tokenizer, line, max_seq_length = data
+    return tokenizer(line, padding="max_length", max_length=max_seq_length)
 
 
 def encode_sliding_window(data):
@@ -755,18 +754,22 @@ class SimpleCenterIdxDataset(Dataset):
             #     ]
             text_lines = dataset_df['text'].tolist()
             lines = [
-                (tokenizer, line)
+                (tokenizer, line, args.max_seq_length)
                 for line in text_lines
                 if (len(line) > 0 and not line.isspace())
             ]
             
-            def pad_masks(mask_label):
+            def pad_masks(mask_label, max_seq_length):
                 assert isinstance(mask_label, torch.Tensor)
                 pad_tensor = torch.zeros(1).bool()
-                return torch.cat([pad_tensor, mask_label, pad_tensor], dim=-1)
+                mask_label_same_with_example = torch.cat([pad_tensor, mask_label, pad_tensor], dim=-1)
+                pad_length = max_seq_length - mask_label_same_with_example.shape[0]
+                return torch.cat([mask_label_same_with_example]+ [pad_tensor]*pad_length, dim=-1)[:max_seq_length]
+            
+            center_masks_labels, template_labels = map(list, zip(*dataset_df['labels'].tolist()))
 
-            mask_labels = [torch.from_numpy(np.array(x)) for x in dataset_df['labels'].tolist()]
-            mask_labels_pad = [pad_masks(x) for x in mask_labels]
+            mask_labels = [torch.from_numpy(np.array(x)) for x in center_masks_labels]
+            mask_labels_pad = [pad_masks(x, args.max_seq_length) for x in mask_labels]
 
             if args.use_multiprocessing:
                 if args.multiprocessing_chunksize == -1:
@@ -787,9 +790,9 @@ class SimpleCenterIdxDataset(Dataset):
             else:
                 self.examples = [encode(line) for line in lines]
 
-            mask_labels_pad = torch.cat(mask_labels_pad, dim=-1)
-            self.examples = [
-                token for tokens in self.examples for token in tokens]
+            mask_labels_pad = torch.stack(mask_labels_pad)
+            # self.examples = [
+            #     token for tokens in self.examples for token in tokens]
 
 
 
@@ -797,41 +800,42 @@ class SimpleCenterIdxDataset(Dataset):
             def check_data(tokens_ids, mask_labels):
                 flag = True
                 for tokens, mask_label in zip(tokens_ids, mask_labels):
-                    if len(tokens) != len(mask_label):
+                    if len(tokens['input_ids']) != len(mask_label):
                         flag = False
                         return flag
                 return flag
             
-            if len(self.examples) > block_size:
-                self.examples = [
-                    tokenizer.build_inputs_with_special_tokens(
-                        self.examples[i: i + block_size]
-                    )
-                    for i in tqdm(
-                        range(0, len(self.examples) -
-                                block_size + 1, block_size)
-                    )
-                ]
-                mask_labels_pad = [
-                    pad_masks(mask_labels_pad[i: i + block_size])
-                    for i in tqdm(
-                            range(0, len(mask_labels_pad) -
-                                    block_size + 1, block_size)
-                    )
-                ]
-            else:
-                self.examples = [
-                    tokenizer.build_inputs_with_special_tokens(
-                        self.examples)
-                ]
+            # if len(self.examples) > block_size:
+            #     self.examples = [
+            #         tokenizer.build_inputs_with_special_tokens(
+            #             self.examples[i: i + block_size]
+            #         )
+            #         for i in tqdm(
+            #             range(0, len(self.examples) -
+            #                     block_size + 1, block_size)
+            #         )
+            #     ]
+            #     mask_labels_pad = [
+            #         pad_masks(mask_labels_pad[i: i + block_size])
+            #         for i in tqdm(
+            #                 range(0, len(mask_labels_pad) -
+            #                         block_size + 1, block_size)
+            #         )
+            #     ]
+            # else:
+            #     self.examples = [
+            #         tokenizer.build_inputs_with_special_tokens(
+            #             self.examples)
+            #     ]
                 
-                mask_labels_pad = [
-                    pad_masks(mask_labels_pad)
-                ]
+            #     mask_labels_pad = [
+            #         pad_masks(mask_labels_pad)
+            #     ]
             
             assert check_data(self.examples, mask_labels_pad)
             
             self.is_rxn_center_tokens = mask_labels_pad
+            self.template_labels = template_labels
 
             
 
@@ -844,7 +848,10 @@ class SimpleCenterIdxDataset(Dataset):
         return len(self.examples)
 
     def __getitem__(self, item):
-        return torch.tensor(self.examples[item], dtype=torch.long), self.is_rxn_center_tokens[item]
+
+        data = {k:torch.tensor(v, dtype=torch.long) for k,v in self.examples[item].items()}
+
+        return data, self.is_rxn_center_tokens[item], self.template_labels[item]
 
 
 def mask_tokens_with_rxn(
@@ -854,13 +861,13 @@ def mask_tokens_with_rxn(
     if isinstance(inputs, torch.Tensor):
         inputs = inputs
     elif isinstance(inputs, tuple):
-        inputs, is_center_marks = inputs
+        inputs_dict, is_center_marks, template_label = inputs
     if tokenizer.mask_token is None:
         raise ValueError(
             "This tokenizer does not have a mask token which is necessary for masked language modeling."
             "Set 'mlm' to False in args if you want to use this tokenizer."
         )
-
+    inputs = inputs_dict['input_ids']
     labels = inputs.clone()
     # We sample a few tokens in each sequence for masked-LM training
     # (with probability args.mlm_probability defaults to 0.15 in Bert/RoBERTa)
@@ -907,7 +914,8 @@ def mask_tokens_with_rxn(
         inputs[indices_random] = random_words[indices_random]
 
         # The rest of the time (10% of the time) we keep the masked input tokens unchanged
-    return inputs, labels
+    inputs_dict['input_ids'] = inputs
+    return inputs_dict, labels, template_label
 
 #  Adapted from  https://github.com/rxn4chemistry/rxnmapper/blob/master/rxnmapper/smiles_utils.py
 def is_atom(token: str, special_tokens: List[str] = BAD_TOKS) -> bool:

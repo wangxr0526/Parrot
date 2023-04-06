@@ -12,12 +12,17 @@ def main(parser_args, debug):
 
     database_file = train_args[
         'database_file'] if not debug else './dataset/pretrain_data/rxn_center_modeling_debug.pkl'
+    
     database = pd.read_pickle(database_file)
+
+    num_template_cls = database['template_labels'].max().item() + 1  # 不算-100
+    train_args['num_template_cls'] = num_template_cls
+    database['labels'] = database.apply(lambda row:(row['all_reaction_center_index_mask'], row['template_labels']), axis=1)
     train_df = database.loc[database['dataset'] == 'train']
-    train_df = train_df[['clean_map_rxn', 'all_reaction_center_index_mask']]
+    train_df = train_df[['clean_map_rxn', 'labels']]
     train_df.columns = ['text', 'labels']
     val_df = database.loc[database['dataset'] == 'val']
-    val_df = val_df[['clean_map_rxn', 'all_reaction_center_index_mask']]
+    val_df = val_df[['clean_map_rxn', 'labels']]
     val_df.columns = ['text', 'labels']
     vocab_path = train_args['vocab_path']
     if not os.path.exists(vocab_path):
@@ -38,7 +43,8 @@ def main(parser_args, debug):
         model_name=None,
         args=train_args,
         use_cuda=True if parser_args.gpu >= 0 else False,
-        cuda_device=parser_args.gpu)
+        cuda_device=parser_args.gpu,
+        num_template_cls=num_template_cls)
     print(model.model)
     model.train_model(train_df=train_df, eval_df=val_df)
     print('Done!')

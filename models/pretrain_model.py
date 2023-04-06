@@ -1,21 +1,25 @@
 # optional
 from tqdm.auto import tqdm, trange
-from dotenv import load_dotenv, find_dotenv
 from models.utils import SimpleCenterDataset, SimpleCenterIdxDataset, mask_tokens_with_rxn
 import os
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import torch
 import logging
 import random
 from rxnfp.models import SmilesLanguageModelingModel
-from rxnfp.tokenization import RegexTokenizer
+from rxnfp.tokenization import SmilesTokenizer
 from torch.nn.utils.rnn import pad_sequence
+from torch import nn
+from torch.nn import CrossEntropyLoss, GELU
 from torch.utils.data import DataLoader, Dataset, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 import math
 from transformers.optimization import AdamW, Adafactor
+from transformers import (BertConfig, BertForMaskedLM, AlbertConfig,
+                          AlbertForMaskedLM)
+from transformers.modeling_outputs import MaskedLMOutput
 from dataclasses import asdict
 from torch.utils.tensorboard import SummaryWriter
 from transformers.optimization import (
@@ -40,24 +44,360 @@ except ImportError:
     wandb_available = False
 logger = logging.getLogger(__name__)
 
-load_dotenv(find_dotenv())
+
+class FeedForward(nn.Module):
+
+    def __init__(self,
+                 hidden_size,
+                 output_size,
+                 hidden_dropout_prob=0.1,
+                 layer_norm_eps=1e-12):
+        super(FeedForward, self).__init__()
+        self.net = nn.Sequential(nn.Linear(hidden_size, hidden_size * 2),
+                                 nn.ReLU(), nn.Dropout(hidden_dropout_prob),
+                                 nn.Linear(hidden_size * 2, output_size))
+        self.layer_norm = nn.LayerNorm(hidden_size, eps=layer_norm_eps)
+        self.dropout = nn.Dropout(hidden_dropout_prob)
+
+    def forward(self, x):
+        x = self.layer_norm(x)
+        return self.net(x)
+
+
+class BertForMaskedLMTPL(BertForMaskedLM):
+
+    def __init__(self, *args, **kwargs):
+        super(BertForMaskedLMTPL, self).__init__(*args, **kwargs)
+        self.template_cls = FeedForward(
+            hidden_size=self.config.hidden_size,
+            output_size=self.config.num_template_cls,
+            hidden_dropout_prob=self.config.hidden_dropout_prob,
+            layer_norm_eps=self.config.layer_norm_eps)
+
+    def forward(
+        self,
+        input_ids: Optional[torch.Tensor] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        token_type_ids: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.Tensor] = None,
+        head_mask: Optional[torch.Tensor] = None,
+        inputs_embeds: Optional[torch.Tensor] = None,
+        encoder_hidden_states: Optional[torch.Tensor] = None,
+        encoder_attention_mask: Optional[torch.Tensor] = None,
+        labels: Optional[Tuple[torch.Tensor]] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+    ) -> Union[Tuple[torch.Tensor], MaskedLMOutput]:
+        r"""
+        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
+            Labels for computing the masked language modeling loss. Indices should be in `[-100, 0, ...,
+            config.vocab_size]` (see `input_ids` docstring) Tokens with indices set to `-100` are ignored (masked), the
+            loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`
+        """
+
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        masked_labels, template_label = labels
+
+        outputs = self.bert(
+            input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            head_mask=head_mask,
+            inputs_embeds=inputs_embeds,
+            encoder_hidden_states=encoder_hidden_states,
+            encoder_attention_mask=encoder_attention_mask,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+        )
+
+        sequence_output = outputs[0]
+        cls_token_output = sequence_output[:, 0, :]
+        prediction_scores = self.cls(sequence_output)
+        template_cls_scores = self.template_cls(cls_token_output)
+
+        loss_fct = CrossEntropyLoss()  # -100 index = padding token
+        masked_lm_loss = loss_fct(
+            prediction_scores.view(-1, self.config.vocab_size),
+            masked_labels.view(-1))
+        
+        if (template_label == -100).sum() == template_label.shape[0]:
+            print('erro')
+
+        loss_tpl = CrossEntropyLoss()
+        tpl_pred_loss = loss_tpl(template_cls_scores.view(-1, self.config.num_template_cls), template_label.view(-1))
+
+        loss_all = masked_lm_loss + tpl_pred_loss
+        # loss_all = masked_lm_loss
+        # tpl_pred_loss = None
+
+
+        output = (prediction_scores, template_cls_scores) + outputs[2:]
+        return ((loss_all, masked_lm_loss, tpl_pred_loss) +
+                output)
+
+
 
 
 class RXNCenterModelingModel(SmilesLanguageModelingModel):
 
-    def __init__(self,
-                 model_name,
-                 model_type='bert',
-                 generator_name=None,
-                 discriminator_name=None,
-                 train_files=None,
-                 args=None,
-                 use_cuda=True,
-                 cuda_device=-1,
-                 **kwargs):
-        super().__init__(model_type, model_name, generator_name,
-                         discriminator_name, train_files, args, use_cuda,
-                         cuda_device, **kwargs)
+    def __init__(
+        self,
+        model_name,
+        model_type='bert',
+        generator_name=None,
+        discriminator_name=None,
+        train_files=None,
+        args=None,
+        use_cuda=True,
+        cuda_device=-1,
+        **kwargs,
+    ):
+
+        """
+        Initializes a LanguageModelingModel.
+        Main difference to https://github.com/ThilinaRajapakse/simpletransformers/blob/master/simpletransformers/classification/classification_model.py
+        is that it uses a SmilesTokenizer instead of the original Tokenizer.
+        Args:
+            model_type: The type of model bert (other model types could be implemented)
+            model_name: Default Transformer model name or path to a directory containing Transformer model file (pytorch_nodel.bin).
+            generator_name (optional): A pretrained model name or path to a directory containing an ELECTRA generator model.
+            discriminator_name (optional): A pretrained model name or path to a directory containing an ELECTRA discriminator model.
+            args (optional): Default args will be used if this parameter is not provided. If provided, it should be a dict containing the args that should be changed in the default args.
+            train_files (optional): List of files to be used when training the tokenizer.
+            use_cuda (optional): Use GPU if available. Setting to False will force model to use CPU only.
+            cuda_device (optional): Specific GPU that should be used. Will use the first available GPU by default.
+            **kwargs (optional): For providing proxies, force_download, resume_download, cache_dir and other options specific to the 'from_pretrained' implementation where this will be supplied.
+        """  # noqa: ignore flake8"
+
+        MODEL_CLASSES = {
+            "bert": (BertConfig, BertForMaskedLMTPL, SmilesTokenizer),
+        }
+
+        self.args = self._load_model_args(model_name)
+
+        if isinstance(args, dict):
+            self.args.update_from_dict(args)
+        elif isinstance(args, LanguageModelingArgs):
+            self.args = args
+
+        if "sweep_config" in kwargs:
+            self.is_sweeping = True
+            sweep_config = kwargs.pop("sweep_config")
+            sweep_values = sweep_config_to_sweep_values(sweep_config)
+            self.args.update_from_dict(sweep_values)
+        else:
+            self.is_sweeping = False
+
+        if self.args.manual_seed:
+            random.seed(self.args.manual_seed)
+            np.random.seed(self.args.manual_seed)
+            torch.manual_seed(self.args.manual_seed)
+            if self.args.n_gpu > 0:
+                torch.cuda.manual_seed_all(self.args.manual_seed)
+
+        if self.args.local_rank != -1:
+            logger.info(f"local_rank: {self.args.local_rank}")
+            torch.distributed.init_process_group(backend="nccl")
+            cuda_device = self.args.local_rank
+
+        if use_cuda:
+            if torch.cuda.is_available():
+                if cuda_device == -1:
+                    self.device = torch.device("cuda")
+                else:
+                    self.device = torch.device(f"cuda:{cuda_device}")
+            else:
+                raise ValueError(
+                    "'use_cuda' set to True when cuda is unavailable."
+                    " Make sure CUDA is available or set use_cuda=False.")
+        else:
+            self.device = "cpu"
+
+        self.results = {}
+
+        if not use_cuda:
+            self.args.fp16 = False
+
+        self.args.model_name = model_name
+        self.args.model_type = model_type
+
+        config_class, model_class, tokenizer_class = MODEL_CLASSES[model_type]
+        self.tokenizer_class = tokenizer_class
+        new_tokenizer = False
+
+        if self.args.vocab_path:
+            self.tokenizer = tokenizer_class(self.args.vocab_path,
+                                             do_lower_case=False)
+        elif self.args.tokenizer_name:
+            self.tokenizer = tokenizer_class.from_pretrained(
+                self.args.tokenizer_name, cache_dir=self.args.cache_dir)
+        elif self.args.model_name:
+            if self.args.model_name == "electra":
+                self.tokenizer = tokenizer_class.from_pretrained(
+                    generator_name, cache_dir=self.args.cache_dir, **kwargs)
+                self.args.tokenizer_name = self.args.model_name
+            else:
+                self.tokenizer = tokenizer_class.from_pretrained(
+                    model_name, cache_dir=self.args.cache_dir, **kwargs)
+                self.args.tokenizer_name = self.args.model_name
+        else:
+            if not train_files:
+                raise ValueError(
+                    "model_name and tokenizer_name are not specified."
+                    "You must specify train_files to train a Tokenizer.")
+            else:
+                self.train_tokenizer(train_files)
+                new_tokenizer = True
+
+        if self.args.config_name:
+            self.config = config_class.from_pretrained(
+                self.args.config_name, cache_dir=self.args.cache_dir)
+        elif self.args.model_name and self.args.model_name != "electra":
+            self.config = config_class.from_pretrained(
+                model_name, cache_dir=self.args.cache_dir, **kwargs)
+        else:
+            self.config = config_class(**self.args.config, **kwargs)
+        if self.args.vocab_size:
+            self.config.vocab_size = self.args.vocab_size
+        if new_tokenizer:
+            self.config.vocab_size = len(self.tokenizer)
+
+        if self.args.model_type == "electra":
+            if generator_name:
+                self.generator_config = ElectraConfig.from_pretrained(
+                    generator_name)
+            elif self.args.model_name:
+                self.generator_config = ElectraConfig.from_pretrained(
+                    os.path.join(self.args.model_name, "generator_config"),
+                    **kwargs,
+                )
+            else:
+                self.generator_config = ElectraConfig(
+                    **self.args.generator_config, **kwargs)
+                if new_tokenizer:
+                    self.generator_config.vocab_size = len(self.tokenizer)
+
+            if discriminator_name:
+                self.discriminator_config = ElectraConfig.from_pretrained(
+                    discriminator_name)
+            elif self.args.model_name:
+                self.discriminator_config = ElectraConfig.from_pretrained(
+                    os.path.join(self.args.model_name, "discriminator_config"),
+                    **kwargs,
+                )
+            else:
+                self.discriminator_config = ElectraConfig(
+                    **self.args.discriminator_config, **kwargs)
+                if new_tokenizer:
+                    self.discriminator_config.vocab_size = len(self.tokenizer)
+
+        if self.args.block_size <= 0:
+            self.args.block_size = min(self.args.max_seq_length,
+                                       self.tokenizer.model_max_length)
+        else:
+            self.args.block_size = min(self.args.block_size,
+                                       self.tokenizer.model_max_length,
+                                       self.args.max_seq_length)
+
+        if self.args.model_name:
+            if self.args.model_type == "electra":
+                if self.args.model_name == "electra":
+                    generator_model = ElectraForMaskedLM.from_pretrained(
+                        generator_name)
+                    discriminator_model = ElectraForPreTraining.from_pretrained(
+                        discriminator_name)
+                    self.model = ElectraForLanguageModelingModel(
+                        config=self.config,
+                        generator_model=generator_model,
+                        discriminator_model=discriminator_model,
+                        generator_config=self.generator_config,
+                        discriminator_config=self.discriminator_config,
+                        tie_generator_and_discriminator_embeddings=self.args.
+                        tie_generator_and_discriminator_embeddings,
+                    )
+                    model_to_resize = (self.model.generator_model.module
+                                       if hasattr(self.model.generator_model,
+                                                  "module") else
+                                       self.model.generator_model)
+                    model_to_resize.resize_token_embeddings(len(
+                        self.tokenizer))
+
+                    model_to_resize = (self.model.discriminator_model.module if
+                                       hasattr(self.model.discriminator_model,
+                                               "module") else
+                                       self.model.discriminator_model)
+                    model_to_resize.resize_token_embeddings(len(
+                        self.tokenizer))
+                    self.model.generator_model = generator_model
+                    self.model.discriminator_model = discriminator_model
+                else:
+                    self.model = model_class.from_pretrained(
+                        model_name,
+                        config=self.config,
+                        cache_dir=self.args.cache_dir,
+                        generator_config=self.generator_config,
+                        discriminator_config=self.discriminator_config,
+                        **kwargs,
+                    )
+                    self.model.load_state_dict(
+                        torch.load(os.path.join(self.args.model_name,
+                                                "pytorch_model.bin"),
+                                   map_location=self.device))
+            else:
+                self.model = model_class.from_pretrained(
+                    model_name,
+                    config=self.config,
+                    cache_dir=self.args.cache_dir,
+                    **kwargs,
+                )
+        else:
+            logger.info(" Training language model from scratch")
+            if self.args.model_type == "electra":
+                generator_model = ElectraForMaskedLM(
+                    config=self.generator_config)
+                discriminator_model = ElectraForPreTraining(
+                    config=self.discriminator_config)
+                self.model = ElectraForLanguageModelingModel(
+                    config=self.config,
+                    generator_model=generator_model,
+                    discriminator_model=discriminator_model,
+                    generator_config=self.generator_config,
+                    discriminator_config=self.discriminator_config,
+                    tie_generator_and_discriminator_embeddings=self.args.
+                    tie_generator_and_discriminator_embeddings,
+                )
+                model_to_resize = (self.model.generator_model.module
+                                   if hasattr(self.model.generator_model,
+                                              "module") else
+                                   self.model.generator_model)
+                model_to_resize.resize_token_embeddings(len(self.tokenizer))
+
+                model_to_resize = (self.model.discriminator_model.module
+                                   if hasattr(self.model.discriminator_model,
+                                              "module") else
+                                   self.model.discriminator_model)
+                model_to_resize.resize_token_embeddings(len(self.tokenizer))
+            else:
+                self.model = model_class(config=self.config)
+                model_to_resize = self.model.module if hasattr(
+                    self.model, "module") else self.model
+                model_to_resize.resize_token_embeddings(len(self.tokenizer))
+
+        if model_type in ["camembert", "xlmroberta"]:
+            warnings.warn(
+                f"use_multiprocessing automatically disabled as {model_type}"
+                " fails when using multiprocessing for feature conversion.")
+            self.args.use_multiprocessing = False
+
+        if self.args.wandb_project and not wandb_available:
+            warnings.warn(
+                "wandb_project specified but wandb is not available. Wandb disabled."
+            )
+            self.args.wandb_project = None
 
     def train_model(
         self,
@@ -134,28 +474,24 @@ class RXNCenterModelingModel(SmilesLanguageModelingModel):
         tokenizer = self.tokenizer
 
         def collate(examples: List[torch.Tensor]):
-            if isinstance(examples[0], torch.Tensor):
 
-                if tokenizer._pad_token is None:
-                    return pad_sequence(examples, batch_first=True)
-                return pad_sequence(examples,
-                                    batch_first=True,
-                                    padding_value=tokenizer.pad_token_id)
-            elif isinstance(examples[0], tuple):
-                _examples = examples
-                examples = [x[0] for x in _examples]
-                is_center_marks = [x[1] for x in _examples]
-                if tokenizer._pad_token is None:
-                    return pad_sequence(
-                        examples,
-                        batch_first=True), torch.stack(is_center_marks)
+            assert isinstance(examples[0], tuple)
+            _examples = examples
+            examples, is_center_marks, template_labels = map(
+                list, zip(*_examples))
+            if tokenizer._pad_token is None:
                 return pad_sequence(
-                    examples,
-                    batch_first=True,
-                    padding_value=tokenizer.pad_token_id), torch.stack(
-                        is_center_marks)
-            else:
-                raise ValueError
+                    examples, batch_first=True), torch.stack(
+                        is_center_marks), torch.tensor(template_labels,
+                                                        dtype=torch.int32)
+            inputs = {
+                'input_ids': torch.stack([x['input_ids'] for x in examples]),
+                'token_type_ids': torch.stack([x['token_type_ids'] for x in examples]),
+                'attention_mask': torch.stack([x['attention_mask'] for x in examples]),
+            }
+            return inputs, torch.stack(
+                    is_center_marks), torch.tensor(template_labels,
+                                                    dtype=torch.long)
 
         if self.is_world_master():
             tb_writer = SummaryWriter(log_dir=args.tensorboard_dir)
@@ -420,22 +756,24 @@ class RXNCenterModelingModel(SmilesLanguageModelingModel):
                 if self.args.use_hf_datasets:
                     batch = batch["input_ids"]
 
-                mask_outputs = (mask_tokens_with_rxn(batch, tokenizer, args)
-                                if args.mlm else (batch, batch))
-                inputs = mask_outputs[0]
-                labels = mask_outputs[1]
-                inputs = inputs.to(self.device)
+                masked_output = (mask_tokens_with_rxn(batch, tokenizer, args)
+                                 if args.mlm else (batch, batch))
+                inputs, labels = masked_output[0], masked_output[1]
+                template_label = masked_output[2]
+                _inputs = {k:v.to(self.device) for k,v in inputs.items()}
                 labels = labels.to(self.device)
+                template_label = template_label.to(self.device)
+                labels = (labels, template_label)
 
                 if args.fp16:
                     with amp.autocast():
                         if args.model_type == "longformer":
-                            outputs = model(inputs,
-                                            attention_mask=None,
+                            outputs = model(_inputs['input_ids'],
+                                            attention_mask=_inputs['attention_mask'],
                                             labels=labels)
                         else:
-                            outputs = (model(inputs, labels=labels) if args.mlm
-                                       else model(inputs, labels=labels))
+                            outputs = (model(_inputs['input_ids'], attention_mask=inputs['attention_mask'],labels=labels) if args.mlm
+                                       else model(inputs['input_ids'], attention_mask=_inputs['attention_mask'], labels=labels))
                         # model outputs are always tuple in pytorch-transformers (see doc)
                         if args.model_type == "electra":
                             g_loss = outputs[0]
@@ -445,12 +783,12 @@ class RXNCenterModelingModel(SmilesLanguageModelingModel):
                             loss = outputs[0]
                 else:
                     if args.model_type == "longformer":
-                        outputs = model(inputs,
-                                        attention_mask=None,
-                                        labels=labels)
+                        outputs = model(_inputs['input_ids'],
+                                            attention_mask=_inputs['attention_mask'],
+                                            labels=labels)
                     else:
-                        outputs = (model(inputs, labels=labels) if args.mlm
-                                   else model(inputs, labels=labels))
+                        outputs = (model(_inputs['input_ids'], attention_mask=_inputs['attention_mask'],labels=labels) if args.mlm
+                                       else model(_inputs['input_ids'], attention_mask=_inputs['attention_mask'], labels=labels))
                     # model outputs are always tuple in pytorch-transformers (see doc)
                     if args.model_type == "electra":
                         g_loss = outputs[0]
@@ -458,6 +796,8 @@ class RXNCenterModelingModel(SmilesLanguageModelingModel):
                         loss = g_loss + args.discriminator_loss_weight * d_loss
                     else:
                         loss = outputs[0]
+                        mlm_loss = outputs[1]
+                        tpl_loss = outputs[2]
                     # if loss.item() < 1:
                     #     masked = (labels[0] != -100).nonzero()
                     #     print(labels[0][masked])
@@ -473,7 +813,7 @@ class RXNCenterModelingModel(SmilesLanguageModelingModel):
 
                 if show_running_loss:
                     batch_iterator.set_description(
-                        f"Epochs {epoch_number}/{args.num_train_epochs}. Running Loss: {current_loss:9.4f}"
+                        f"Epochs {epoch_number}/{args.num_train_epochs}. Running Loss: {current_loss:9.4f}, MLM loss: {mlm_loss.item():9.4f}, TPL loss: {tpl_loss.item():9.4f}"
                     )
 
                 if args.gradient_accumulation_steps > 1:
@@ -921,28 +1261,24 @@ class RXNCenterModelingModel(SmilesLanguageModelingModel):
         results = {}
 
         def collate(examples: List[torch.Tensor]):
-            if isinstance(examples[0], torch.Tensor):
 
-                if tokenizer._pad_token is None:
-                    return pad_sequence(examples, batch_first=True)
-                return pad_sequence(examples,
-                                    batch_first=True,
-                                    padding_value=tokenizer.pad_token_id)
-            elif isinstance(examples[0], tuple):
-                _examples = examples
-                examples = [x[0] for x in _examples]
-                is_center_marks = [x[1] for x in _examples]
-                if tokenizer._pad_token is None:
-                    return pad_sequence(
-                        examples,
-                        batch_first=True), torch.stack(is_center_marks)
+            assert isinstance(examples[0], tuple)
+            _examples = examples
+            examples, is_center_marks, template_labels = map(
+                list, zip(*_examples))
+            if tokenizer._pad_token is None:
                 return pad_sequence(
-                    examples,
-                    batch_first=True,
-                    padding_value=tokenizer.pad_token_id), torch.stack(
-                        is_center_marks)
-            else:
-                raise ValueError
+                    examples, batch_first=True), torch.stack(
+                        is_center_marks), torch.tensor(template_labels,
+                                                        dtype=torch.int32)
+            inputs = {
+                'input_ids': torch.stack([x['input_ids'] for x in examples]),
+                'token_type_ids': torch.stack([x['token_type_ids'] for x in examples]),
+                'attention_mask': torch.stack([x['attention_mask'] for x in examples]),
+            }
+            return inputs, torch.stack(
+                    is_center_marks), torch.tensor(template_labels,
+                                                    dtype=torch.long)
 
         eval_sampler = SequentialSampler(eval_dataset)
         if self.args.use_hf_datasets:
@@ -961,7 +1297,7 @@ class RXNCenterModelingModel(SmilesLanguageModelingModel):
         if args.n_gpu > 1:
             model = torch.nn.DataParallel(model)
 
-        eval_loss = 0.0
+        eval_loss, eval_mlm_loss, eval_tpl_loss = 0.0, 0.0, 0.0
         nb_eval_steps = 0
         model.eval()
 
@@ -971,28 +1307,43 @@ class RXNCenterModelingModel(SmilesLanguageModelingModel):
             if self.args.use_hf_datasets:
                 batch = batch["input_ids"]
 
-            inputs, labels = (mask_tokens_with_rxn(batch, tokenizer, args)
-                              if args.mlm else (batch, batch))
-            inputs = inputs.to(self.device)
+            masked_output = (mask_tokens_with_rxn(batch, tokenizer, args)
+                                if args.mlm else (batch, batch))
+            inputs, labels = masked_output[0], masked_output[1]
+            template_label = masked_output[2]
+            _inputs = {k:v.to(self.device) for k,v in inputs.items()}
             labels = labels.to(self.device)
+            template_label = template_label.to(self.device)
+            labels = (labels, template_label)
             with torch.no_grad():
-                outputs = (model(inputs, labels=labels)
-                           if args.mlm else model(inputs, labels=labels))
+                outputs = (model(_inputs['input_ids'], attention_mask=_inputs['attention_mask'],labels=labels) if args.mlm
+                                       else model(_inputs['input_ids'], attention_mask=_inputs['attention_mask'], labels=labels))
                 if args.model_type == "electra":
                     g_loss = outputs[0]
                     d_loss = outputs[1]
                     lm_loss = g_loss + args.discriminator_loss_weight * d_loss
                 else:
-                    lm_loss = outputs[0]
+                    all_loss, lm_loss, tpl_loss = outputs[:3]
                 if self.args.n_gpu > 1:
+                    all_loss, lm_loss, tpl_loss = outputs[:3]
+                    all_loss = all_loss.mean()
                     lm_loss = lm_loss.mean()
-                eval_loss += lm_loss.item()
+                    tpl_loss = tpl_loss.mean()
+                eval_loss += all_loss.item()
+                eval_mlm_loss += lm_loss.item()
+                eval_tpl_loss += tpl_loss.item()
+
             nb_eval_steps += 1
 
         eval_loss = eval_loss / nb_eval_steps
-        perplexity = torch.exp(torch.tensor(eval_loss))
+        eval_mlm_loss = eval_mlm_loss / nb_eval_steps
+        eval_tpl_loss = eval_tpl_loss / nb_eval_steps
+        perplexity = torch.exp(torch.tensor(eval_mlm_loss))
 
         results["eval_loss"] = eval_loss
+        results["eval_mlm_loss"] = eval_mlm_loss
+        results["eval_tpl_loss"] = eval_tpl_loss
+        
         results["perplexity"] = perplexity
 
         output_eval_file = os.path.join(eval_output_dir, "eval_results.txt")
@@ -1001,3 +1352,17 @@ class RXNCenterModelingModel(SmilesLanguageModelingModel):
                 writer.write("{} = {}\n".format(key, str(results[key])))
 
         return results
+    
+    def _create_training_progress_scores(self, **kwargs):
+        extra_metrics = {key: [] for key in kwargs}
+        training_progress_scores = {
+            "global_step": [],
+            "perplexity": [],
+            "eval_mlm_loss": [],
+            "eval_tpl_loss": [],
+            "eval_loss": [],
+            "train_loss": [],
+            **extra_metrics,
+        }
+
+        return training_progress_scores
