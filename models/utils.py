@@ -429,7 +429,9 @@ class ConditionWithTempDataset(Dataset):
 
 def encode(data):
     tokenizer, line, max_seq_length = data
-    return tokenizer(line, padding="max_length", max_length=max_seq_length)
+    encode_results = tokenizer(line, padding="max_length", max_length=max_seq_length)
+    encode_results = {k:v[:max_seq_length] for k,v in encode_results.items()}
+    return encode_results
 
 
 def encode_sliding_window(data):
