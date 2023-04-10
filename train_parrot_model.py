@@ -10,6 +10,11 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 def main(parser_args, debug):
     config = yaml.load(open(parser_args.config_path, "r"),
                        Loader=yaml.FullLoader)
+    if debug:
+        config['model_args']['wandb_project'] = 'test_load'
+        config['model_args']['output_dir'] = './out/debug'
+        config['model_args']['best_model_dir'] = './outputs/debug'
+    
     print('\n########################\nConfigs:\n########################\n')
     print(yaml.dump(config))
     print('########################\n')
@@ -39,7 +44,8 @@ def main(parser_args, debug):
 
     eval_df = database_df.loc[database_df['dataset'] == 'val']
     if debug:
-        eval_df = eval_df[:1000]
+        eval_df = eval_df[:1000] 
+
     eval_df = eval_df[['canonical_rxn', 'condition_labels']]
     eval_df.columns = ['text', 'labels']
     print('validation dataset number: {}'.format(len(eval_df)))
@@ -68,5 +74,5 @@ if __name__ == '__main__':
                         type=str)
 
     parser_args = parser.parse_args()
-    debug = True
+    debug = False
     main(parser_args, debug)
