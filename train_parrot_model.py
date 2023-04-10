@@ -30,12 +30,16 @@ def main(parser_args, debug):
     })
 
     train_df = database_df.loc[database_df['dataset'] == 'train']
+    if debug:
+        train_df = train_df[:1000]
     train_df = train_df[['canonical_rxn', 'condition_labels']]
     train_df.columns = ['text', 'labels']
     print(train_df.head())
     print('train dataset number: {}'.format(len(train_df)))
 
     eval_df = database_df.loc[database_df['dataset'] == 'val']
+    if debug:
+        eval_df = eval_df[:1000]
     eval_df = eval_df[['canonical_rxn', 'condition_labels']]
     eval_df.columns = ['text', 'labels']
     print('validation dataset number: {}'.format(len(eval_df)))
@@ -64,5 +68,5 @@ if __name__ == '__main__':
                         type=str)
 
     parser_args = parser.parse_args()
-    debug = False
+    debug = True
     main(parser_args, debug)
