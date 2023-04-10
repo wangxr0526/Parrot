@@ -23,8 +23,8 @@ manual_seed: 42
 max_seq_length: 512
 mrc_probability: 0.5
 num_train_epochs: 50
-output_dir: ./out/rcm_model_pretrain
-best_model_dir: ./outputs/best_rcm_model_pretrain
+output_dir: ./out/rcm_model_pretrain_tpl_add
+best_model_dir: ./outputs/best_rcm_model_pretrain_tpl_add
 overwrite_output_dir: true
 train_batch_size: 32
 vocab_path: ./dataset/pretrain_data/vocab.txt

@@ -8,7 +8,7 @@ model_args:
   manual_seed: 42
   max_seq_length: 512
   num_train_epochs: 100
-  pretrained_path: ./outputs/uspto_rxn_center_modeling_remapped
+  pretrained_path: ./outputs/best_rcm_model_pretrain_tpl_add
   output_dir: ./out/Parrot_train_in_USPTO_Condition_rcm_pretrain
   best_model_dir: ./outputs/Parrot_train_in_USPTO_Condition_rcm_pretrain
   overwrite_output_dir: true
