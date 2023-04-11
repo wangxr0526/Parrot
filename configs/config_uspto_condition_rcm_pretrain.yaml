@@ -4,13 +4,13 @@ model_args:
   fp16: true
   gradient_accumulation_steps: 1
   use_multiprocessing: true
-  learning_rate: 2.0e-04
+  learning_rate: 5.0e-04
   manual_seed: 42
   max_seq_length: 512
   num_train_epochs: 100
   pretrained_path: ./outputs/best_rcm_model_pretrain_tpl_add
-  output_dir: ./out/Parrot_train_in_USPTO_Condition_rcm_pretrain
-  best_model_dir: ./outputs/Parrot_train_in_USPTO_Condition_rcm_pretrain
+  output_dir: ./out/Parrot_train_in_USPTO_Condition_rcm_pretrain_lr5e-4
+  best_model_dir: ./outputs/Parrot_train_in_USPTO_Condition_rcm_pretrain_lr5e-4
   overwrite_output_dir: true
   regression: false
   thread_count: 8
