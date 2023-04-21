@@ -96,6 +96,8 @@ def main(parser_args, debug):
 
     hyperopt_config = yaml.load(open(parser_args.hyperopt_config_path, "r"),
                                 Loader=yaml.FullLoader)
+    print('################# HyperOpt Config #################')
+    print(yaml.dump(hyperopt_config))
 
     space = (hp.choice('batch_size', hyperopt_config['batch_size']),
              hp.uniform('lr', float(hyperopt_config['lr']['min']),

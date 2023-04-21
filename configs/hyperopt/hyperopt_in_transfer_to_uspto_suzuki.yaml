@@ -1,6 +1,5 @@
 batch_size:
   - 8
-  - 16
 lr:
   max: 5e-3
-  min: 1e-5
+  min: 1e-4
