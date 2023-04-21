@@ -42,7 +42,6 @@ try:
 except ImportError:
     wandb_available = False
 
-
 BOS, EOS, PAD, MASK = '[BOS]', '[EOS]', '[PAD]', '[MASK]'
 
 
@@ -1901,24 +1900,15 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
             return pred_conditions, pred_temperatures, topk_acc_df
         return pred_conditions, pred_temperatures
 
-    def view_condition_bert_attentions(self,
-                                       input_rxn_smiles,
-                                       heatmap=True,
-                                       fig_save_path=None,
-                                       figsize=(46, 20),
-                                       output_prediction=False,
-                                       output_demo_fname=None,
-                                       show_attention_fig=False,
-                                       mean_attn=False):
-        from models.utils import condition_bert_head_view
-        from models.utils import condition_bert_head_heatmap
+    def greedy_search_one_sample_with_attn(self, rxn):
+        start_symbol = self.condition_label_mapping[1][BOS]
         start_symbol = self.condition_label_mapping[1][BOS]
         example_df = pd.DataFrame({
-            'text': [input_rxn_smiles],
+            'text': [rxn],
             'labels': [[0, 0, 0, 0, 0]],
         })
         tokenizer = self.tokenizer
-        input_tokens = tokenizer.tokenize(input_rxn_smiles)
+        input_tokens = tokenizer.tokenize(rxn)
         self._move_model_to_device()
         model = self.model
         model.output_attentions = True
@@ -1973,7 +1963,8 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
             self.condition_label_mapping[0][x] for x in ys.tolist()[0]
         ][1:-1]
         attention_weights = [
-            x[:, :, :, :len(input_tokens) + 2] for x in attention_weights
+            x[:, :, :, :len(input_tokens) + 2]
+            for x in attention_weights['cross_attn']
         ]
         # for i in range(attention_weights.size(0)):
         #     for j in range(attention_weights.size(1)):
@@ -1983,12 +1974,30 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
             x[:, :, :-1, 1:-1].transpose(2, 3) for x in attention_weights
         ]
         attention_weights = torch.cat(attention_weights, dim=0)
+
+        return predicted_conditions, attention_weights, input_tokens
+
+    def view_condition_bert_attentions(self,
+                                       rxn,
+                                       heatmap=True,
+                                       fig_save_path=None,
+                                       figsize=(46, 20),
+                                       output_prediction=False,
+                                       output_demo_fname=None,
+                                       show_attention_fig=False,
+                                       mean_attn=False):
+        from models.utils import condition_bert_head_view
+        from models.utils import condition_bert_head_heatmap
+
+        predicted_conditions, attention_weights, input_tokens = self.greedy_search_one_sample_with_attn(
+            rxn)
+        attention_weights = [x['cross_attn'] for x in attention_weights]
         if output_demo_fname:
             if not os.path.exists(os.path.dirname(output_demo_fname)):
                 os.makedirs(os.path.dirname(output_demo_fname))
             attention_weights_numpy = [x.tolist() for x in attention_weights]
             demo_data = (attention_weights_numpy, input_tokens,
-                         predicted_conditions, input_rxn_smiles)
+                         predicted_conditions, rxn)
             with open(output_demo_fname, 'wb') as f:
                 pickle.dump(demo_data, f)
 
@@ -1996,7 +2005,7 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
             viz_attention_reaction(attention_weights=attention_weights,
                                    src_tokens=input_tokens,
                                    tgt_tokens=predicted_conditions,
-                                   rxn_smiles=input_rxn_smiles,
+                                   rxn_smiles=rxn,
                                    mean_attn=mean_attn)
 
         if heatmap:
@@ -2020,27 +2029,12 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
             else:
                 return html, None
 
-    def analyze_function_group_attention_with_condition(
-            self,
-            test_df,
-            test_batch_size=8,
-            subgraph_fpath=None,
-            analysis_results_save_path=None):
-        if os.path.exists(analysis_results_save_path):
-            print('Reading calculated analysis results...')
-            with open(
-                    os.path.join(analysis_results_save_path,
-                                 'score_map_condition_type_dict.pkl'),
-                    'rb') as f:
-                score_map_condition_type_dict = pickle.load(f)
-            return score_map_condition_type_dict
-        print('Analysing function group attention with condition...')
-        if subgraph_fpath == None:
-            raise ValueError()
-        subgraph_data_df = pd.read_csv(subgraph_fpath, header=None)
-        subgraph_data_df.columns = ['smiles', 'rxn_split_count']
-        subgraph_smiles = subgraph_data_df['smiles'].tolist()
-        print(subgraph_smiles)
+    def greedy_search_batch_with_attn(self,
+                                      test_df,
+                                      test_batch_size=8,
+                                      normalize=False,
+                                      transpose_end=True):
+
         self._move_model_to_device()
         model = self.model
         args = self.args
@@ -2084,7 +2078,8 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
         # 数据集加载只保留一种加载方式，其余全部删除
 
         predicted_labels = []
-        test_attention_weights = []
+        test_cross_attention_weights = []
+        test_decoder_self_attention_weights = []
         model.eval()
         for batch in tqdm(
                 test_dataloader,
@@ -2111,19 +2106,41 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
                         tgt_mask,
                         memory_key_padding_mask=memory_key_padding_mask
                     )  # attention_weights --> (batch_size, nhead, tgt_size, source_size)
+                    cross_attention_weights = attention_weights['cross_attn']
+                    decoder_self_attention_weights = attention_weights[
+                        'decoder_self_attn']
                     pred = model.generator(out[:, -1])
                     prob = torch.softmax(pred, dim=1)
                     _, next_word = prob.topk(1)
                     # next_word = next_word.item()
                     ys = torch.cat([ys, next_word], dim=1)
                 predicted_labels.extend(ys.tolist())
-                batch_attention_weights = torch.cat(
-                    [x.unsqueeze(1) for x in attention_weights], dim=1).cpu()
-                batch_attention_weights = [
-                    x.squeeze() for x in torch.chunk(
-                        batch_attention_weights, test_batch_size, dim=0)
+
+                # Cross Attention (RXN2Condition)
+                batch_cross_attention_weights = torch.cat(
+                    [x.unsqueeze(1) for x in cross_attention_weights],
+                    dim=1).to(torch.device('cpu'))
+                batch_cross_attention_weights = [
+                    x.squeeze()
+                    for x in torch.chunk(batch_cross_attention_weights,
+                                         inputs['input_ids'].shape[0],
+                                         dim=0)
                 ]
-                test_attention_weights.extend(batch_attention_weights)
+                test_cross_attention_weights.extend(
+                    batch_cross_attention_weights)
+
+                # Decoder Self Attention (Condition2Condition)
+                batch_decoder_self_attention_weights = torch.cat(
+                    [x.unsqueeze(1) for x in decoder_self_attention_weights],
+                    dim=1).to(torch.device('cpu'))
+                batch_decoder_self_attention_weights = [
+                    x.squeeze()
+                    for x in torch.chunk(batch_decoder_self_attention_weights,
+                                         inputs['input_ids'].shape[0],
+                                         dim=0)
+                ]
+                test_decoder_self_attention_weights.extend(
+                    batch_decoder_self_attention_weights)
 
         predicted_conditions = []
         for one_prediction in tqdm(
@@ -2137,18 +2154,76 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
 
         # test_attention_weights_rm_masked_attn --> list(n_sample * (nlayer, nhead, source_size, tgt_size))
 
-        test_attention_weights_rm_masked_attn = []
-        for input_tokens, attention_weights in tqdm(
-                zip(input_tokens_list, test_attention_weights),
-                desc='Remove Masked Attentions',
+        test_cross_attention_weights_rm_masked_attn = []
+        for input_tokens, cross_attention_weights in tqdm(
+                zip(input_tokens_list, test_cross_attention_weights),
+                desc='Remove Masked Cross Attentions',
                 total=len(input_tokens_list)):
 
-            attention_weights = attention_weights[:, :, :, :len(input_tokens) +
-                                                  2]
-            attention_weights = attention_weights[:, :, :-1,
-                                                  1:-1].transpose(2, 3)
-            test_attention_weights_rm_masked_attn.append(attention_weights)
+            cross_attention_weights = cross_attention_weights[:, :, :, :len(
+                input_tokens) + 2]
+            cross_attention_weights = cross_attention_weights[:, :, :-1, 1:-1]
 
+            if normalize:
+                cross_attention_weights = cross_attention_weights.numpy()
+                row_sums = cross_attention_weights.sum(axis=-1)
+                cross_attention_weights = np.divide(
+                    cross_attention_weights,
+                    row_sums[:, :, :, np.newaxis],
+                    out=np.zeros_like(cross_attention_weights),
+                    where=row_sums[:, :, :, np.newaxis] != 0,
+                )
+            if transpose_end:
+                cross_attention_weights = cross_attention_weights.transpose(3, 2)
+            test_cross_attention_weights_rm_masked_attn.append(
+                cross_attention_weights)
+
+        test_decoder_self_attention_weights_rm_spec = []
+        for pred, self_attention_weights in tqdm(
+                zip(predicted_conditions, test_decoder_self_attention_weights),
+                desc='Handle Decoder Self Attentions',
+                total=len(input_tokens_list)):
+
+            self_attention_weights = self_attention_weights.numpy()
+            self_attention_weights = self_attention_weights[:, :, :, :]
+
+            test_decoder_self_attention_weights_rm_spec.append(
+                self_attention_weights)
+
+            
+
+        attention_weights = {
+            'cross_attn': test_cross_attention_weights_rm_masked_attn,
+            'decoder_self_attn': test_decoder_self_attention_weights_rm_spec
+        }
+
+        return predicted_conditions, attention_weights, input_tokens_list
+
+    def analyze_function_group_attention_with_condition(
+            self,
+            test_df,
+            test_batch_size=8,
+            subgraph_fpath=None,
+            analysis_results_save_path=None):
+        if os.path.exists(analysis_results_save_path):
+            print('Reading calculated analysis results...')
+            with open(
+                    os.path.join(analysis_results_save_path,
+                                 'score_map_condition_type_dict.pkl'),
+                    'rb') as f:
+                score_map_condition_type_dict = pickle.load(f)
+            return score_map_condition_type_dict
+        print('Analysing function group attention with condition...')
+        if subgraph_fpath == None:
+            raise ValueError()
+        subgraph_data_df = pd.read_csv(subgraph_fpath, header=None)
+        subgraph_data_df.columns = ['smiles', 'rxn_split_count']
+        subgraph_smiles = subgraph_data_df['smiles'].tolist()
+        print(subgraph_smiles)
+
+        predicted_conditions, attention_weights, input_tokens_list = self.greedy_search_batch_with_attn(
+            test_df=test_df, test_batch_size=test_batch_size)
+        test_attention_weights_rm_masked_attn = attention_weights['cross_attn']
         rxn_smiles = test_df["text"].astype(str).tolist()
 
         score_map_condition_type_dict = analyze_subgraph_attention_with_condition(
@@ -2194,10 +2269,9 @@ if __name__ == '__main__':
                                            args=model_args,
                                            use_cuda=torch.cuda.is_available())
 
-    model.view_condition_bert_attentions(
-        input_rxn_smiles=dataset_df['canonical_rxn'][0],
-        heatmap=True,
-        show_attention_fig=True,
-        mean_attn=True)
+    model.view_condition_bert_attentions(rxn=dataset_df['canonical_rxn'][0],
+                                         heatmap=True,
+                                         show_attention_fig=True,
+                                         mean_attn=True)
     # model.view_condition_bert_attentions(
     #     input_rxn_smiles=dataset_df['canonical_rxn'][0], heatmap=False)

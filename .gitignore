@@ -28,8 +28,7 @@ dataset/source_dataset/uspto_org_xml
 !paper_data/USPTO_condition_frag_analysis_results/*
 !preprocess_script/*.txt
 !preprocess_script/reaxys_script/qurey_file.zip
-!dataset/source_dataset/USPTO_condition_final/pistachio_rxnclass2name.json
-!preprocess_script/check_data/frag_cnt_nubmer_10000.txt
+!analysis_script/eval_data/eval_use_data/frag_cnt_nubmer_10000.txt
 !preprocess_script/pistachio_rxnclass2name.json
 !preprocess_script/uspto_script/condition_classfication_data
 !dataset/source_dataset/Reaxys_total_syn_condition_final/*
@@ -37,3 +36,9 @@ dataset/source_dataset/uspto_org_xml
 dataset/source_dataset/Reaxys_total_syn_condition_final/Reaxys_total_syn_condition.csv
 !dataset/source_dataset/USPTO_suzuki_final/*
 !preprocess_script/reaxys_script/qurey_file/*
+analysis_script/*.ipynb
+*/nohup.out
+baseline_model/model
+baseline_model/log
+baseline_model/runs
+dataset/source_dataset/USPTO_suzuki_final/*

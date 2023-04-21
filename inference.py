@@ -86,7 +86,7 @@ if __name__ == '__main__':
     parser = ArgumentParser('Test Arguements')
     parser.add_argument('--gpu', default=0, help='GPU device to use', type=int)
     parser.add_argument('--config_path',
-                        default='configs/config_inference_use_reaxys.yaml',
+                        default='configs/config_uspto_condition_aug_n5_lr_low.yaml',
                         help='Path to config file',
                         type=str)
 

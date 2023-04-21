@@ -3,9 +3,11 @@ import math
 from typing import Optional, Tuple
 import warnings
 import torch
+from collections import defaultdict
 from torch import Tensor, nn
 from torch.nn import functional as F
-from torch.nn.modules import TransformerDecoder, TransformerDecoderLayer
+from torch.nn.modules import TransformerDecoder as OrgTransformerDecoder
+from torch.nn.modules import TransformerDecoderLayer  as OrgTransformerDecoderLayer
 from torch.nn.modules.activation import MultiheadAttention
 from torch.nn.functional import _scaled_dot_product_attention, _in_projection_packed, _in_projection, linear
 from torch.overrides import (has_torch_function, handle_torch_function)
@@ -310,7 +312,7 @@ class MultiheadAttention(MultiheadAttention):
             return attn_output, attn_output_weights
 
 
-class TransformerDecoderLayer(TransformerDecoderLayer):
+class TransformerDecoderLayer(OrgTransformerDecoderLayer):
 
     def __init__(self,
                  d_model,
@@ -336,6 +338,11 @@ class TransformerDecoderLayer(TransformerDecoderLayer):
                                                  dropout=dropout,
                                                  batch_first=batch_first,
                                                  **factory_kwargs)
+        self.self_attn = MultiheadAttention(d_model,
+                                                 nhead,
+                                                 dropout=dropout,
+                                                 batch_first=batch_first,
+                                                 **factory_kwargs)
 
     def forward(self,
                 tgt: Tensor,
@@ -347,23 +354,33 @@ class TransformerDecoderLayer(TransformerDecoderLayer):
 
         x = tgt
         if self.norm_first:
-            x = x + self._sa_block(self.norm1(x), tgt_mask,
+            sa_block_x, sa_block_attention = self._sa_block(self.norm1(x), tgt_mask,
                                    tgt_key_padding_mask)
+            x = x + sa_block_x
             mha_block_x, mha_block_attention = self._mha_block(
                 self.norm2(x), memory, memory_mask, memory_key_padding_mask)
             # x = x + self._mha_block(self.norm2(x), memory, memory_mask, memory_key_padding_mask)
             x = x + mha_block_x
             x = x + self._ff_block(self.norm3(x))
         else:
-            x = self.norm1(x +
-                           self._sa_block(x, tgt_mask, tgt_key_padding_mask))
+            sa_block_x, sa_block_attention = self._sa_block(x, tgt_mask, tgt_key_padding_mask)
+            x = self.norm1(x + sa_block_x)
             mha_block_x, mha_block_attention = self._mha_block(
                 x, memory, memory_mask, memory_key_padding_mask)
             # x = self.norm2(x + self._mha_block(x, memory, memory_mask, memory_key_padding_mask))
             x = self.norm2(x + mha_block_x)
             x = self.norm3(x + self._ff_block(x))
 
-        return x, mha_block_attention
+        return x, {'cross_attn':mha_block_attention, 'decoder_self_attn': sa_block_attention}
+    
+    # self-attention block
+    def _sa_block(self, x: Tensor,
+                  attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor]) -> Tensor:
+        x, attention_weight = self.self_attn(x, x, x,
+                           attn_mask=attn_mask,
+                           key_padding_mask=key_padding_mask,
+                           need_weights=self.output_attention)
+        return self.dropout1(x), attention_weight
 
     # multihead attention block
     def _mha_block(self, x: Tensor, mem: Tensor, attn_mask: Optional[Tensor],
@@ -379,7 +396,7 @@ class TransformerDecoderLayer(TransformerDecoderLayer):
         return self.dropout2(x), attention_weight
 
 
-class TransformerDecoder(TransformerDecoder):
+class TransformerDecoder(OrgTransformerDecoder):
 
     def __init__(self,
                  decoder_layer,
@@ -398,10 +415,10 @@ class TransformerDecoder(TransformerDecoder):
                 memory_key_padding_mask: Optional[Tensor] = None) -> Tensor:
 
         output = tgt
-        self.attention_weights = []
+        self.attention_weights = defaultdict(list)
 
         for mod in self.layers:
-            output, mha_block_attention = mod(
+            output, attn_dict = mod(
                 output,
                 memory,
                 tgt_mask=tgt_mask,
@@ -409,7 +426,8 @@ class TransformerDecoder(TransformerDecoder):
                 tgt_key_padding_mask=tgt_key_padding_mask,
                 memory_key_padding_mask=memory_key_padding_mask)
             if self.output_attention:
-                self.attention_weights.append(mha_block_attention)
+                for key in attn_dict:
+                    self.attention_weights[key].append(attn_dict[key])
 
         if self.norm is not None:
             output = self.norm(output)
