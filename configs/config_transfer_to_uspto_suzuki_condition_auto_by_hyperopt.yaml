@@ -9,7 +9,7 @@ model_args:
   max_seq_length: 512
   num_train_epochs: 100
   ignore_mismatched_sizes: True
-  pretrained_path: ./outputs/Parrot_train_in_USPTO_Condition
+  pretrained_path: ./outputs/Parrot_train_in_USPTO_Condition_enhance
   output_dir: ./out/Parrot_train_in_USPTO_Suzuki_Condition_auto_by_hyperopt
   best_model_dir: ./outputs/Parrot_train_in_USPTO_Suzuki_Condition_auto_by_hyperopt
   overwrite_output_dir: true
