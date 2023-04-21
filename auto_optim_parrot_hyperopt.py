@@ -57,6 +57,9 @@ class SearchByHyperopt:
             self.pretrained_path = None
         self.model_args = model_args
 
+        self.output_dir = self.model_args['output_dir']
+        self.best_model_dir = self.model_args['best_model_dir']
+
         self.gpu = gpu
 
     def __call__(self, hyperopt_args):
@@ -64,11 +67,9 @@ class SearchByHyperopt:
         self.model_args['batch_size'] = batch_size
         self.model_args['lr'] = lr
         self.model_args['output_dir'] = os.path.join(
-            self.model_args['output_dir'],
-            'batch_size-{}_lr-{}'.format(batch_size, lr))
+            self.output_dir, 'batch_size-{}_lr-{}'.format(batch_size, lr))
         self.model_args['best_model_dir'] = os.path.join(
-            self.model_args['best_model_dir'],
-            'batch_size-{}_lr-{}'.format(batch_size, lr))
+            self.best_model_dir, 'batch_size-{}_lr-{}'.format(batch_size, lr))
 
         model = ParrotConditionPredictionModel(
             "bert",
@@ -110,7 +111,8 @@ if __name__ == '__main__':
     parser.add_argument('--gpu', default=0, help='GPU device to use', type=int)
     parser.add_argument(
         '--parrot_config_path',
-        default='configs/config_transfer_to_uspto_suzuki_condition_auto_by_hyperopt.yaml',
+        default=
+        'configs/config_transfer_to_uspto_suzuki_condition_auto_by_hyperopt.yaml',
         help='Path to config file',
         type=str)
 
@@ -121,5 +123,5 @@ if __name__ == '__main__':
         type=str)
 
     parser_args = parser.parse_args()
-    debug = False
+    debug = True
     main(parser_args, debug)
