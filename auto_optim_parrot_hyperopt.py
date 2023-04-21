@@ -110,7 +110,7 @@ if __name__ == '__main__':
     parser.add_argument('--gpu', default=0, help='GPU device to use', type=int)
     parser.add_argument(
         '--parrot_config_path',
-        default='configs/config_transfer_to_uspto_suzuki_condition.yaml',
+        default='configs/config_transfer_to_uspto_suzuki_condition_auto_by_hyperopt.yaml',
         help='Path to config file',
         type=str)
 
