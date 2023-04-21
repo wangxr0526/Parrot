@@ -63,13 +63,13 @@ class SearchByHyperopt:
         self.gpu = gpu
 
     def __call__(self, hyperopt_args):
-        batch_size, lr = hyperopt_args
+        batch_size, learning_rate = hyperopt_args
         self.model_args['batch_size'] = batch_size
-        self.model_args['lr'] = lr
+        self.model_args['learning_rate'] = learning_rate
         self.model_args['output_dir'] = os.path.join(
-            self.output_dir, 'batch_size-{}_lr-{}'.format(batch_size, lr))
+            self.output_dir, 'batch_size-{}_lr-{}'.format(batch_size, learning_rate))
         self.model_args['best_model_dir'] = os.path.join(
-            self.best_model_dir, 'batch_size-{}_lr-{}'.format(batch_size, lr))
+            self.best_model_dir, 'batch_size-{}_lr-{}'.format(batch_size, learning_rate))
 
         model = ParrotConditionPredictionModel(
             "bert",
