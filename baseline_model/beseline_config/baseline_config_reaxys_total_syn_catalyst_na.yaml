@@ -1,0 +1,24 @@
+database_path: '../dataset/source_dataset/Reaxys_total_syn_condition_final'
+database_name: 'Reaxys_total_syn_condition'
+test_database_path: '../dataset/source_dataset/Reaxys_total_syn_condition_final'
+test_database_name: 'Reaxys_total_syn_condition_test_catalyst_na'
+model_path: ./model
+model_name: 'baseline_train_1_Reaxys_total_syn_condition_rxnfp'
+use_temperature: true
+gpu: 0
+lr: 0.0003
+batch_size: 512
+epochs: 100
+h_dim: 1000
+dropout_rate: 0.5
+top_fname: test_catalyst_na_dataset_accuracy.csv
+condition_to_calculate:
+  - s1
+  - r1
+topk_rank_thres:
+  c1: 1
+  s1: 3
+  s2: 1
+  r1: 5
+  r2: 1
+  

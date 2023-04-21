@@ -1,0 +1,11 @@
+database_path: '../dataset/source_dataset/Reaxys_total_syn_condition_final'
+database_name: 'Reaxys_total_syn_condition'
+model_path: ./model
+model_name: 'baseline_train_1_Reaxys_total_syn_condition_rxnfp'
+use_temperature: true
+gpu: 0
+lr: 0.0003
+batch_size: 512
+epochs: 100
+h_dim: 1000
+dropout_rate: 0.5

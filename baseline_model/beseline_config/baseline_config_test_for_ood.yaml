@@ -1,0 +1,15 @@
+database_path: '../dataset/source_dataset/USPTO_condition_final'
+database_name: 'USPTO_condition'
+test_database_path: '../dataset/source_dataset/Reaxys_total_syn_condition_final'
+test_database_name: 'Reaxys_total_syn_condition_test_for_ood'
+using_super_class_to_test: false
+model_path: ./model
+model_name: 'baseline_train_1_USPTO_condition'
+use_temperature: false
+gpu: 0
+lr: 0.0010
+batch_size: 512
+epochs: 50
+h_dim: 1000
+dropout_rate: 0.5
+top_fname: test_ood_accuracy.csv

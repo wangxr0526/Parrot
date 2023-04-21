@@ -1,0 +1,25 @@
+database_path: '../dataset/source_dataset/USPTO_condition_final'
+database_name: 'USPTO_condition'
+test_database_path: '../dataset/source_dataset/Reaxys_total_syn_condition_final_balance'
+test_database_name: 'Reaxys_total_syn_condition_test_for_ood_have_catalyst'
+using_super_class_to_test: true
+model_path: ./model
+model_name: 'baseline_train_1_USPTO_condition'
+use_temperature: false
+gpu: 0
+lr: 0.0010
+batch_size: 512
+epochs: 50
+h_dim: 1000
+dropout_rate: 0.5
+top_fname: test_have_catalyst_dataset_ood_supercls_accuracy.csv
+condition_to_calculate:
+  - c1
+  - s1
+  - r1
+topk_rank_thres:
+  c1: 2
+  s1: 3
+  s2: 1
+  r1: 3
+  r2: 1
