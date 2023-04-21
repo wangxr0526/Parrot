@@ -1,0 +1,10 @@
+center_half_accuracy: 0.62
+condition_type: c1
+condition_type_idx: 0
+fpr: 0.260453
+max_index:
+- 1
+- 0
+n_std: -0.20000000000000007
+overlap: 0.555635
+overlap_false_positive_rate_sub_max: 0.295182
