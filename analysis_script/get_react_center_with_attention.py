@@ -1015,7 +1015,7 @@ def get_mapping_accuracy(pred: List[int], gts: List[List]):
 
 if __name__ == '__main__':
 
-    debug = False
+    debug = True
     rxnmapper_uspto_dataset_path = './eval_data/eval_use_data/uspto_rxnmapper'
     uspto_50k_eval_set = pd.read_json(
         os.path.join(rxnmapper_uspto_dataset_path, 'Validation',
@@ -1029,9 +1029,11 @@ if __name__ == '__main__':
 
     mapper = Mapper(config_path='../configs/config_inference_use_uspto.yaml')
 
-    all_accuracy_results = []
+
     best_head_layer = None
     best_accuracy = 0
+    all_accuracy_results_df = pd.DataFrame(columns=['layer', 'head', 'accuracy', 'confidence'])
+    all_accuracy_results_df.to_csv('./eval_data/eval_results/mapper_evaluation_results.csv', index=False)
     for head in range(0, 4):
         for layer in range(0, 12):
             results = [
@@ -1057,8 +1059,10 @@ if __name__ == '__main__':
             accuracy = np.array(is_correct).sum() / len(is_correct)
             confs = [x for x in confs if x]
             mean_confs = np.array(confs).mean() if confs else None
-
-            all_accuracy_results.append((layer, head, accuracy, mean_confs))
+            accuracy_results_df = pd.DataFrame([(layer, head, accuracy, mean_confs)])
+            accuracy_results_df.to_csv('./eval_data/eval_results/mapper_evaluation_results.csv', mode='a', index=False, header=None)
+            all_accuracy_results_df = pd.concat([all_accuracy_results_df, accuracy_results_df])
+            
 
             if mean_confs:
                 print('Accuracy: {:.4f}, Confidence: {:.6f}'.format(
@@ -1082,9 +1086,6 @@ if __name__ == '__main__':
     print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
     print('Best head layer', best_head_layer)
     print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
-    all_accuracy_results_df = pd.DataFrame(
-        all_accuracy_results,
-        columns=['layer', 'head', 'accuracy', 'confidence'])
     all_accuracy_results_df.sort_values(by=['accuracy', 'confidence'],
                                         ascending=False)
     all_accuracy_results_df.to_csv(
