@@ -925,8 +925,8 @@ class Mapper:
         encoder_self_attn = attention_weights['encoder_self_attn']
         selected_attns = []
         for attn in encoder_self_attn:
-            selected_attn = attn[[use_layers], use_head, :, :]
-            selected_attn = attn[:, use_head, :, :]
+            selected_attn = attn[use_layers, :, :, :]
+            selected_attn = selected_attn[:, use_head, :, :]
             selected_attn = torch.mean(selected_attn, dim=[0])
             selected_attns.append(selected_attn)
         return selected_attns, input_tokens, predicted_conditions
@@ -1015,7 +1015,7 @@ def get_mapping_accuracy(pred: List[int], gts: List[List]):
 
 if __name__ == '__main__':
 
-    debug = False
+    debug = True
     rxnmapper_uspto_dataset_path = './eval_data/eval_use_data/uspto_rxnmapper'
     uspto_50k_eval_set = pd.read_json(
         os.path.join(rxnmapper_uspto_dataset_path, 'Validation',
