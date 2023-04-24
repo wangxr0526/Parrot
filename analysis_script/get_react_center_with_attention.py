@@ -1015,7 +1015,7 @@ def get_mapping_accuracy(pred: List[int], gts: List[List]):
 
 if __name__ == '__main__':
 
-    debug = True
+    debug = False
     rxnmapper_uspto_dataset_path = './eval_data/eval_use_data/uspto_rxnmapper'
     uspto_50k_eval_set = pd.read_json(
         os.path.join(rxnmapper_uspto_dataset_path, 'Validation',
