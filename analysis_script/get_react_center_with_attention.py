@@ -1015,7 +1015,7 @@ def get_mapping_accuracy(pred: List[int], gts: List[List]):
 
 if __name__ == '__main__':
 
-    debug = False
+    debug = True
     rxnmapper_uspto_dataset_path = './eval_data/eval_use_data/uspto_rxnmapper'
     uspto_50k_eval_set = pd.read_json(
         os.path.join(rxnmapper_uspto_dataset_path, 'Validation',
@@ -1086,7 +1086,7 @@ if __name__ == '__main__':
     print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
     print('Best head layer', best_head_layer)
     print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
-    all_accuracy_results_df.sort_values(by=['accuracy', 'confidence'],
-                                        ascending=False)
-    all_accuracy_results_df.to_csv(
-        './eval_data/eval_results/mapper_evaluation_results.csv', index=False)
+    # all_accuracy_results_df.sort_values(by=['accuracy', 'confidence'],
+    #                                     ascending=False)
+    # all_accuracy_results_df.to_csv(
+    #     './eval_data/eval_results/mapper_evaluation_results.csv', index=False)
