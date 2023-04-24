@@ -61,7 +61,7 @@ def get_center_score(attn, center_idx, num_atoms, n_std: float = 0.0):
             sub_mean = attn_mean[l][h]
             sub_std = attn_std[l][h]
             sub_mask = sub_attn > sub_mean + n_std * sub_std
-            pred_center_idx = np.argwhere(sub_mask).reshape(-1).tolist()
+            pred_center_idx = np.argwhere(sub_mask).reshape(-1).tolist()   # Reaction Center Prediction
             pred_center_idx = set(pred_center_idx)
 
             overlap_score, false_positive_rate, center_accuracy_two, center_accuracy_half = calculate_score(

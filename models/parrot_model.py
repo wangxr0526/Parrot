@@ -2079,6 +2079,7 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
 
         predicted_labels = []
         test_cross_attention_weights = []
+        test_encoder_self_attention_weights = []
         test_decoder_self_attention_weights = []
         model.eval()
         for batch in tqdm(
@@ -2093,7 +2094,22 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
                 memory_key_padding_mask = inputs['memory_key_padding_mask']
                 _inputs = {key: inputs[key] for key in encoder_input_keys}
                 # _inputs['memory_key_padding_mask'] = (_inputs['attention_mask'] == 0)
-                memory = model.bert(**_inputs)[0]
+                encoder_outputs = model.bert(**_inputs, output_attentions=True)
+                memory, encoder_self_attention_weights = encoder_outputs.last_hidden_state, encoder_outputs.attentions
+
+
+                # Encoder Self Attention (Reacton2Reaction)
+                batch_encoder_self_attention_weights = torch.cat(
+                    [x.unsqueeze(1) for x in encoder_self_attention_weights],
+                    dim=1).to(torch.device('cpu'))
+                batch_encoder_self_attention_weights = [
+                    x.squeeze()
+                    for x in torch.chunk(batch_encoder_self_attention_weights,
+                                         inputs['input_ids'].shape[0],
+                                         dim=0)
+                ]
+                test_encoder_self_attention_weights.extend(batch_encoder_self_attention_weights)
+
                 # memory = memory[:,:,:len(input_tokens)+2]
                 ys = torch.ones(memory.size(0), 1).fill_(start_symbol).type(
                     torch.long).to(self.device)
@@ -2177,6 +2193,19 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
                 cross_attention_weights = cross_attention_weights.transpose(3, 2)
             test_cross_attention_weights_rm_masked_attn.append(
                 cross_attention_weights)
+            
+        test_encoder_self_attention_weights_rm_masked_attn = []
+        for input_tokens, self_attention_weights in tqdm(
+                zip(input_tokens_list, test_encoder_self_attention_weights),
+                desc='Remove Masked Encoder Self Attentions',
+                total=len(input_tokens_list)):
+
+            self_attention_weights = self_attention_weights[:, :, :len(
+                input_tokens) + 2, :len(
+                input_tokens) + 2]
+            test_encoder_self_attention_weights_rm_masked_attn.append(
+                self_attention_weights)
+
 
         test_decoder_self_attention_weights_rm_spec = []
         for pred, self_attention_weights in tqdm(
@@ -2194,7 +2223,8 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
 
         attention_weights = {
             'cross_attn': test_cross_attention_weights_rm_masked_attn,
-            'decoder_self_attn': test_decoder_self_attention_weights_rm_spec
+            'decoder_self_attn': test_decoder_self_attention_weights_rm_spec,
+            'encoder_self_attn': test_encoder_self_attention_weights_rm_masked_attn,
         }
 
         return predicted_conditions, attention_weights, input_tokens_list
