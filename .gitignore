@@ -42,3 +42,5 @@ baseline_model/model
 baseline_model/log
 baseline_model/runs
 dataset/source_dataset/USPTO_suzuki_final/*
+analysis_script/eval_data/eval_results
+analysis_script/eval_data/par_config

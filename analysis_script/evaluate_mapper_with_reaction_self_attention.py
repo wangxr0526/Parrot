@@ -8,11 +8,12 @@ TODO:
 '''
 from argparse import ArgumentParser
 from functools import partial
+from itertools import islice
 import json
 import os
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(os.getcwd()), '..')))
 
 from analysis_script.evaluate_reaction2condition_attention import ParrotConditionPredictionModelAnalysis
 
@@ -399,7 +400,7 @@ class AttentionScorer:
         # Mask of atoms
         self.atom_token_mask = np.array(
             get_mask_for_tokens(self.tokens,
-                                self.special_tokens)).astype(np.bool)
+                                self.special_tokens)).astype(bool)
 
         # Atoms numbered in the array
         self.token2atom = np.array(number_tokens(tokens))
@@ -409,7 +410,7 @@ class AttentionScorer:
         }
 
         # Adjacency graph for all tokens
-        self.adjacency_matrix = tokens_to_adjacency(tokens).astype(np.bool)
+        self.adjacency_matrix = tokens_to_adjacency(tokens).astype(bool)
 
         self._precursors_atom_types = None
         self._product_atom_types = None
@@ -831,7 +832,7 @@ class Mapper:
         self.attention_multiplier = mapper_config.get("attention_multiplier",
                                                       90.0)
         self.head = mapper_config.get("head", 3)
-        self.layers = mapper_config.get("layers", [10])
+        self.layers = mapper_config.get("layers", [4])
 
     def init_dataset_to_predict(self,
                                 input_dataset_path,
@@ -920,7 +921,8 @@ class Mapper:
             input_df_with_fake_labels,
             test_batch_size=self.batch_size,
             normalize=True,
-            transpose_end=False)
+            transpose_end=False,
+            silent=True)
 
         encoder_self_attn = attention_weights['encoder_self_attn']
         selected_attns = []
@@ -943,11 +945,12 @@ class Mapper:
         force_layer: Optional[int] = None,
         force_head: Optional[int] = None,
         debug=False,
+        output_mapping_tuples=False
     ):
 
         results = []
         if canonicalize_rxns:
-            rxns = [process_reaction(rxn) for rxn in rxn_smiles_list]
+            rxn_smiles_list = [process_reaction(rxn) for rxn in rxn_smiles_list]
 
         attns, input_tokens, _ = self.convert_batch_to_attns(
             rxn_smiles_list=rxn_smiles_list,
@@ -981,6 +984,8 @@ class Mapper:
                 "confidence":
                 np.prod(output["confidences"]),
             }
+            if output_mapping_tuples:
+                result["mapping_tuples"] = output["mapping_tuples"]
             if detailed_output:
                 result["pxr_mapping_vector"] = output["pxr_mapping_vector"]
                 result["pxr_confidences"] = output["confidences"]
@@ -990,6 +995,49 @@ class Mapper:
                 result["tokens"] = just_tokens
 
             results.append(result)
+        return results
+    
+
+    def get_batched_attention_guided_atom_maps(
+        self,
+        rxn_smiles_list=None,
+        zero_set_p: bool = True,
+        zero_set_r: bool = True,
+        canonicalize_rxns: bool = True,
+        detailed_output: bool = False,
+        absolute_product_inds: bool = False,
+        force_layer: Optional[int] = None,
+        force_head: Optional[int] = None,
+        debug=False,
+        batch_size=64,
+        output_mapping_tuples=False,
+    ):
+
+        results = []
+        n_batches = len(rxn_smiles_list) // batch_size
+        if len(rxn_smiles_list) % batch_size != 0:
+            n_batches += 1
+        emb_iter = iter(rxn_smiles_list)
+
+
+        for i in tqdm(range(n_batches)):
+            batch_rxns = list(islice(emb_iter, batch_size))
+            results_batch = self.get_attention_guided_atom_maps(
+                input_dataset_path='',
+                rxn_smiles_list=batch_rxns,
+                zero_set_p=zero_set_p,
+                zero_set_r=zero_set_r,
+                canonicalize_rxns=canonicalize_rxns,
+                detailed_output=detailed_output,
+                absolute_product_inds=absolute_product_inds,
+                force_head=force_head,
+                force_layer=force_layer,
+                debug=debug,
+                output_mapping_tuples=output_mapping_tuples,
+            )
+
+            results += results_batch
+
         return results
 
 
@@ -1015,7 +1063,7 @@ def get_mapping_accuracy(pred: List[int], gts: List[List]):
 
 if __name__ == '__main__':
 
-    debug = False
+    debug = True
     rxnmapper_uspto_dataset_path = './eval_data/eval_use_data/uspto_rxnmapper'
     uspto_50k_eval_set = pd.read_json(
         os.path.join(rxnmapper_uspto_dataset_path, 'Validation',
@@ -1061,7 +1109,6 @@ if __name__ == '__main__':
             mean_confs = np.array(confs).mean() if confs else None
             accuracy_results_df = pd.DataFrame([(layer, head, accuracy, mean_confs)])
             accuracy_results_df.to_csv('./eval_data/eval_results/mapper_evaluation_results.csv', mode='a', index=False, header=None)
-            all_accuracy_results_df = pd.concat([all_accuracy_results_df, accuracy_results_df])
             
 
             if mean_confs:
@@ -1084,7 +1131,7 @@ if __name__ == '__main__':
             print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
 
     print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
-    print('Best head layer', best_head_layer)
+    print('Best head layer', best_head_layer)    # {'head': 3, 'layer': 4}
     print('@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@')
     # all_accuracy_results_df.sort_values(by=['accuracy', 'confidence'],
     #                                     ascending=False)

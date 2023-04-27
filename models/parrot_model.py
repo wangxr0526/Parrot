@@ -2033,7 +2033,9 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
                                       test_df,
                                       test_batch_size=8,
                                       normalize=False,
-                                      transpose_end=True):
+                                      transpose_end=True,
+                                      silent=False,
+                                      block_encoder_self_attn=False):
 
         self._move_model_to_device()
         model = self.model
@@ -2047,9 +2049,11 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
 
         test_dataset = self.load_and_cache_examples(test_examples,
                                                     verbose=False,
-                                                    no_cache=True)
-        print('loaded test dataset {}'.format(
-            test_dataset.examples['input_ids'].shape[0]))
+                                                    no_cache=True,
+                                                    silent=silent)
+        if not silent:
+            print('loaded test dataset {}'.format(
+                test_dataset.examples['input_ids'].shape[0]))
         test_sampler = SequentialSampler(test_dataset)
         test_dataloader = DataLoader(
             test_dataset,
@@ -2071,7 +2075,7 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
         tokenizer = self.tokenizer
         input_tokens_list = [
             tokenizer.tokenize(x)
-            for x in tqdm(test_df["text"].astype(str).tolist())
+            for x in tqdm(test_df["text"].astype(str).tolist(), disable=silent)
         ]
 
         # test_output_dir = output_dir
@@ -2085,6 +2089,7 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
         for batch in tqdm(
                 test_dataloader,
                 desc="Running Testing Greedy Search",
+                disable=silent
         ):
             with torch.no_grad():
                 inputs = self._get_inputs_dict(batch)
@@ -2097,18 +2102,18 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
                 encoder_outputs = model.bert(**_inputs, output_attentions=True)
                 memory, encoder_self_attention_weights = encoder_outputs.last_hidden_state, encoder_outputs.attentions
 
-
-                # Encoder Self Attention (Reacton2Reaction)
-                batch_encoder_self_attention_weights = torch.cat(
-                    [x.unsqueeze(1) for x in encoder_self_attention_weights],
-                    dim=1).to(torch.device('cpu'))
-                batch_encoder_self_attention_weights = [
-                    x.squeeze()
-                    for x in torch.chunk(batch_encoder_self_attention_weights,
-                                         inputs['input_ids'].shape[0],
-                                         dim=0)
-                ]
-                test_encoder_self_attention_weights.extend(batch_encoder_self_attention_weights)
+                if not block_encoder_self_attn:
+                    # Encoder Self Attention (Reacton2Reaction)
+                    batch_encoder_self_attention_weights = torch.cat(
+                        [x.unsqueeze(1) for x in encoder_self_attention_weights],
+                        dim=1).to(torch.device('cpu'))
+                    batch_encoder_self_attention_weights = [
+                        x.squeeze()
+                        for x in torch.chunk(batch_encoder_self_attention_weights,
+                                            inputs['input_ids'].shape[0],
+                                            dim=0)
+                    ]
+                    test_encoder_self_attention_weights.extend(batch_encoder_self_attention_weights)
 
                 # memory = memory[:,:,:len(input_tokens)+2]
                 ys = torch.ones(memory.size(0), 1).fill_(start_symbol).type(
@@ -2162,6 +2167,7 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
         for one_prediction in tqdm(
                 predicted_labels,
                 desc="Converting Labels to Conditions",
+                disable=silent
         ):
             predicted_conditions.append([
                 self.condition_label_mapping[0][x]
@@ -2174,7 +2180,8 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
         for input_tokens, cross_attention_weights in tqdm(
                 zip(input_tokens_list, test_cross_attention_weights),
                 desc='Remove Masked Cross Attentions',
-                total=len(input_tokens_list)):
+                total=len(input_tokens_list),
+                disable=silent):
 
             cross_attention_weights = cross_attention_weights[:, :, :, :len(
                 input_tokens) + 2]
@@ -2198,7 +2205,8 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
         for input_tokens, self_attention_weights in tqdm(
                 zip(input_tokens_list, test_encoder_self_attention_weights),
                 desc='Remove Masked Encoder Self Attentions',
-                total=len(input_tokens_list)):
+                total=len(input_tokens_list),
+                disable=silent):
 
             self_attention_weights = self_attention_weights[:, :, :len(
                 input_tokens) + 2, :len(
@@ -2211,7 +2219,8 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
         for pred, self_attention_weights in tqdm(
                 zip(predicted_conditions, test_decoder_self_attention_weights),
                 desc='Handle Decoder Self Attentions',
-                total=len(input_tokens_list)):
+                total=len(input_tokens_list),
+                disable=silent):
 
             self_attention_weights = self_attention_weights.numpy()
             self_attention_weights = self_attention_weights[:, :, :, :]
