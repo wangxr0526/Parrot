@@ -1,0 +1,25 @@
+database_path: '../dataset/source_dataset/USPTO_condition_final'
+database_name: 'USPTO_condition'
+test_database_path: '../dataset/source_dataset/USPTO_condition_final'
+test_database_name: 'USPTO_condition'
+using_super_class_to_test: true
+model_path: ./model
+model_name: 'baseline_train_1_USPTO_condition'
+use_temperature: false
+gpu: 0
+lr: 0.0010
+batch_size: 512
+epochs: 50
+h_dim: 1000
+dropout_rate: 0.5
+top_fname: test_have_catalyst_dataset_uspto_supercls_accuracy.csv
+condition_to_calculate:
+  - c1
+  - s1
+  - r1
+topk_rank_thres:
+  c1: 2
+  s1: 3
+  s2: 1
+  r1: 3
+  r2: 1

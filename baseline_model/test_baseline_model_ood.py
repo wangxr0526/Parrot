@@ -431,7 +431,10 @@ if __name__ == '__main__':
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     
-    config = yaml.load(open('./beseline_config/baseline_config_test_for_ood_supercls_catalyst_na.yaml', "r"),
+    # config = yaml.load(open('./beseline_config/baseline_config_test_for_ood_supercls_catalyst_na.yaml', "r"),
+    #                    Loader=yaml.FullLoader)
+
+    config = yaml.load(open('./beseline_config/baseline_config_test_for_uspto_supercls_catalyst_na.yaml', "r"),
                        Loader=yaml.FullLoader)
 
     device = torch.device('cuda:{}'.format(
