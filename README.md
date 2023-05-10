@@ -19,7 +19,6 @@ Implementation of reaction condition prediction with Parrot<br><br>
     - [Pretrain](#2-pretrain)
     - [Train Parrot](#3-train-parrot)
     - [Test Parrot](#4-test-parrot)
-    - [Transfer to USPTO-Suzuki-Condition](#5-transfer-to-uspto-suzuki-condition)
 
 ## Publication
 Generic Interpretable Reaction Condition Predictions with Open Reaction Condition Datasets and Unsupervised Learning of Reaction Center
@@ -208,17 +207,4 @@ Test in the Reaxy-TotalSyn-Condition dataset:
     ```
     python test_parrot_model.py --gpu CUDA_ID \
                                 --config_path configs/config_reaxys_totalsyn_condition.yaml
-    ```
-### **[5]** Transfer to USPTO-Suzuki-Condition
-Transfer learning in the USPTO-Suzuki-Condition dataset:
-- Parrot-POL
-    ```
-    python train_parrot_model.py --gpu CUDA_ID \
-                                 --config_path configs/config_transfer_to_uspto_suzuki_condition.yaml
-    ```
-Test in the USPTO-Suzuki-Condition dataset:
-- Parrot-POL
-    ```
-    python test_parrot_model.py --gpu CUDA_ID \
-                                 --config_path configs/config_transfer_to_uspto_suzuki_condition.yaml
     ```
