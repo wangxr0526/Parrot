@@ -116,7 +116,7 @@ def load_dataset_label(data_root, database_name, use_temperature=False):
     return fps_dict, label_dict
 
 def caculate_accuracy_supercls(model, data_loader, device, condition2label, topk_rank_thres=None, save_topk_path=None, use_temperature=False, top_fname=None, super_class_dicts=None, topk_get=[1, 3, 5, 10, 15],condition_to_calculate=['c1', 's1', 's2', 'r1', 'r2']):
-    print('Caculating validataion topk accuracy...')
+    print('Caculating topk accuracy...')
     if not topk_rank_thres:
         topk_rank_thres = {
             'c1': 1,
@@ -437,6 +437,9 @@ if __name__ == '__main__':
     config = yaml.load(open('./beseline_config/baseline_config_test_for_uspto_supercls_catalyst_na.yaml', "r"),
                        Loader=yaml.FullLoader)
 
+    # config = yaml.load(open('./beseline_config/baseline_config_test_for_uspto_supercls_have_catalyst.yaml', "r"),
+    #                    Loader=yaml.FullLoader)
+
     device = torch.device('cuda:{}'.format(
         config['gpu'])) if config['gpu'] >= 0 else torch.device('cpu')
     time_str = time.strftime('%Y-%m-%d_%Hh-%Mm-%Ss',
@@ -497,9 +500,9 @@ if __name__ == '__main__':
     model = model.to(device)
     if config['using_super_class_to_test']:
         print('using super classification to test')
-        with open('../data/uspto_script/condition_classfication_data/uspto_reagent_to_cls_idx.json', 'r', encoding='utf-8') as f:
+        with open('../preprocess_script/uspto_script/condition_classfication_data/uspto_reagent_to_cls_idx.json', 'r', encoding='utf-8') as f:
             uspto_reagent_to_cls_idx = json.load(f)
-        with open('../data/uspto_script/condition_classfication_data/uspto_solvent_to_cls_idx.json', 'r', encoding='utf-8') as f:
+        with open('../preprocess_script/uspto_script/condition_classfication_data/uspto_solvent_to_cls_idx.json', 'r', encoding='utf-8') as f:
             uspto_solvent_to_cls_idx = json.load(f)
         super_class_dicts = {
             'solvent': uspto_solvent_to_cls_idx,
