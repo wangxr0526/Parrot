@@ -44,3 +44,4 @@ baseline_model/runs
 dataset/source_dataset/USPTO_suzuki_final/*
 analysis_script/eval_data/eval_results
 analysis_script/eval_data/par_config
+auto_optim_parrot_hyperopt.py
