@@ -37,6 +37,7 @@ dataset/source_dataset/Reaxys_total_syn_condition_final/Reaxys_total_syn_conditi
 !dataset/source_dataset/USPTO_suzuki_final/*
 !preprocess_script/reaxys_script/qurey_file/*
 analysis_script/*.ipynb
+!analysis_script/analyze_function_group_attention_with_condition.ipynb
 */nohup.out
 baseline_model/model
 baseline_model/log
