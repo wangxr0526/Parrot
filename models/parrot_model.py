@@ -339,7 +339,8 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
             for p in self.model.named_parameters():
                 if p[0] not in train_layers:
                     p[1].requires_grad = False
-
+        if not hasattr(self.args, 'loss_equilibrium_constant'):
+            self.args.loss_equilibrium_constant = 0.001
         self.results = {}
 
         if not use_cuda:
@@ -792,7 +793,7 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
                 current_ppl = np.exp(current_loss)
                 if args.use_temperature:
                     reg_loss = outputs[3]
-                    loss += 0.001 * reg_loss
+                    loss += args.loss_equilibrium_constant * reg_loss
 
                 if show_running_loss:
                     batch_iterator.set_description(
@@ -1262,7 +1263,7 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
         eval_ppl = np.exp(eval_loss)
         if args.use_temperature:
             eval_reg_loss = eval_reg_loss / nb_eval_steps
-            eval_loss += 0.001 * eval_reg_loss
+            eval_loss += args.loss_equilibrium_constant * eval_reg_loss
             eval_temp_mae = eval_temp_mae / len(eval_dataset)
             results['eval_temp_mae'] = eval_temp_mae
 

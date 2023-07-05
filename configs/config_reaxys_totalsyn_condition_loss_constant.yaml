@@ -3,13 +3,14 @@ model_args:
   fp16: false
   gradient_accumulation_steps: 1
   use_multiprocessing: true
+  loss_equilibrium_constant: 0.01
   learning_rate: 2.0e-04
   manual_seed: 42
   max_seq_length: 512
   num_train_epochs: 100
   pretrained_path: ./outputs/best_rcm_model_pretrain
-  output_dir: ./out/Parrot_train_in_Reaxy_TotalSyn_Condition
-  best_model_dir: ./outputs/Parrot_train_in_Reaxy_TotalSyn_Condition
+  output_dir: ./out/Parrot_train_in_Reaxy_TotalSyn_Condition_loss_equilibrium_constant_0.01
+  best_model_dir: ./outputs/Parrot_train_in_Reaxy_TotalSyn_Condition_loss_equilibrium_constant_0.01
   overwrite_output_dir: true
   regression: false
   thread_count: 8

@@ -107,7 +107,7 @@ def main(parser_args, debug=False):
         beam = testset_args['beam']
 
         pred_conditions, pred_temperatures, topk_acc_df = model.condition_beam_search(
-            test_df,
+            test_df[:100],
             output_dir=model_args['best_model_dir'],
             beam=beam,
             test_batch_size=8,
