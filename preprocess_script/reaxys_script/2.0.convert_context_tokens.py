@@ -23,7 +23,6 @@ def get_condition2idx_mapping(all_condition_data: pd.DataFrame):
 if __name__ == '__main__':
     debug = False
     print('Debug:', debug)
-    fp_size = 16384
     source_data_path = '../../dataset/source_dataset/'
     final_condition_data_path = os.path.join(
         source_data_path, 'Reaxys_total_syn_condition_final')

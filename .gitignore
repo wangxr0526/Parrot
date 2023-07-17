@@ -33,11 +33,10 @@ dataset/source_dataset/uspto_org_xml
 !preprocess_script/uspto_script/condition_classfication_data
 !dataset/source_dataset/Reaxys_total_syn_condition_final/*
 !test_files/*
-dataset/source_dataset/Reaxys_total_syn_condition_final/Reaxys_total_syn_condition.csv
+dataset/source_dataset/Reaxys_total_syn_condition_final/*
 !dataset/source_dataset/USPTO_suzuki_final/*
 !preprocess_script/reaxys_script/qurey_file/*
 analysis_script/*.ipynb
-!analysis_script/analyze_function_group_attention_with_condition.ipynb
 */nohup.out
 baseline_model/model
 baseline_model/log
@@ -46,3 +45,6 @@ dataset/source_dataset/USPTO_suzuki_final/*
 analysis_script/eval_data/eval_results
 analysis_script/eval_data/par_config
 auto_optim_parrot_hyperopt.py
+test_pipeline
+!analysis_script/interpretability_case_study_for_rxn2rxn_and_rxn2condition.ipynb
+analysis_script/use_mapper_and_extract_tpl.py

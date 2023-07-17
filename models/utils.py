@@ -991,10 +991,21 @@ def number_tokens(tokens: List[str],
 
     return out
 
-def visualize_atom_attention(smiles, weights):
-    mol = Chem.MolFromSmiles(smiles)
-    fig = SimilarityMaps.GetSimilarityMapFromWeights(mol, weights, colorMap=plt.get_cmap('RdBu'), alpha=0,
-                                                        size=(150, 150))
+def visualize_atom_attention(smiles, weights, cmap='RdBu', scale=-1, alpha=0, size=(150, 150), add_dummy_atom=False):
+    
+    if smiles != '':
+        mol = Chem.MolFromSmiles(smiles)
+        if add_dummy_atom and (mol.GetNumAtoms() == 1):
+            mol = Chem.RWMol(mol)
+            mol.AddAtom(Chem.Atom('*'))
+            weights.append(0)
+    else:
+        mol = Chem.MolFromSmiles('*-*')
+        weights.append(0)
+        weights.append(0)
+
+        
+    fig = SimilarityMaps.GetSimilarityMapFromWeights(mol, weights, colorMap=plt.get_cmap(cmap), scale=scale, alpha=alpha, size=size)
     return fig
 
 

@@ -5,12 +5,50 @@ import signal
 from timeout_decorator import TimeoutError
 import pandas as pd
 from tqdm.auto import tqdm
+from rdkit import Chem
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from analysis_script.calculate_reaction_center_accuracy import get_rxn_center_idx, calculate_score
 
-sys.path.append(os.path.abspath(os.path.join(os.getcwd(), '..')))
 
+def get_rxn_center_idx(rxn, tpl):
+    react_mol, prod_mol = [Chem.MolFromSmiles(smi) for smi in rxn.split('>>')]
+    num_react_atoms = react_mol.GetNumAtoms()
+    num_prod_atoms = prod_mol.GetNumAtoms()
+    prod_subgraph, react_subgraph = [
+        Chem.MolFromSmarts(smarts) for smarts in tpl.split('>>')
+    ]
+    react_match_tpl_idx = react_mol.GetSubstructMatch(react_subgraph)
+
+    react_match_tpl_idx = list(react_match_tpl_idx)
+    react_match_tpl_idx.sort()
+    react_not_match_tpl_idx = [
+        i for i in range(num_react_atoms) if i not in react_match_tpl_idx
+    ]
+    prod_match_tpl_idx = prod_mol.GetSubstructMatch(prod_subgraph)
+    prod_match_tpl_idx = list(prod_match_tpl_idx)
+    prod_match_tpl_idx.sort()
+    prod_not_match_tpl_idx = [
+        i for i in range(num_prod_atoms) if i not in prod_match_tpl_idx
+    ]
+
+    return react_match_tpl_idx, react_not_match_tpl_idx, prod_match_tpl_idx, prod_not_match_tpl_idx, num_react_atoms, num_prod_atoms
+
+def calculate_score(pred_idx: set, gt_idx: set, num_atoms: int):
+    all_atom_idx = set([i for i in range(num_atoms)])
+    TP = len(pred_idx.intersection(gt_idx))
+    FP = len(pred_idx.difference(gt_idx))
+    TN = len(all_atom_idx.difference((gt_idx).union(pred_idx)))
+
+    if (FP + TP) != len(pred_idx):
+        print("there is a mistake in the calculations")
+
+    overlap_score = TP / len(gt_idx) if len(gt_idx) != 0 else 1
+    false_positive_rate = FP / (FP + TN) if all_atom_idx != gt_idx else 0
+
+    center_accuracy_two = TP >= 2
+    center_accuracy_half = TP >= (len(gt_idx) / 2)
+
+    return overlap_score, false_positive_rate, center_accuracy_two, center_accuracy_half
 
 def timeout(seconds=5):
     def decorator(func):

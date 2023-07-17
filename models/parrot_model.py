@@ -1992,7 +1992,7 @@ class ParrotConditionPredictionModel(SmilesClassificationModel):
 
         predicted_conditions, attention_weights, input_tokens = self.greedy_search_one_sample_with_attn(
             rxn)
-        attention_weights = [x['cross_attn'] for x in attention_weights]
+        # attention_weights = [x['cross_attn'] for x in attention_weights]
         if output_demo_fname:
             if not os.path.exists(os.path.dirname(output_demo_fname)):
                 os.makedirs(os.path.dirname(output_demo_fname))
