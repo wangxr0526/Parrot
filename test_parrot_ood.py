@@ -52,13 +52,13 @@ def main(parser_args, debug=False):
     assert config['using_super_class_to_test']
     print('using super classification to test')
     with open(
-            './dataset_preprocess/uspto_script/condition_classfication_data/uspto_reagent_to_cls_idx.json',
+            './preprocess_script/uspto_script/condition_classfication_data/uspto_reagent_to_cls_idx.json',
             'r',
             encoding='utf-8') as f:
         uspto_reagent_to_cls_idx = json.load(f)
         model.uspto_reagent_to_cls_idx = uspto_reagent_to_cls_idx
     with open(
-            './dataset_preprocess/uspto_script/condition_classfication_data/uspto_solvent_to_cls_idx.json',
+            './preprocess_script/uspto_script/condition_classfication_data/uspto_solvent_to_cls_idx.json',
             'r',
             encoding='utf-8') as f:
         uspto_solvent_to_cls_idx = json.load(f)

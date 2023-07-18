@@ -1,4 +1,3 @@
-best_model_dir: ./outputs/uspto_rxn_center_modeling_remapped
 config:
   architectures:
   - BertForMaskedLM

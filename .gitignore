@@ -48,3 +48,4 @@ auto_optim_parrot_hyperopt.py
 test_pipeline
 !analysis_script/interpretability_case_study_for_rxn2rxn_and_rxn2condition.ipynb
 analysis_script/use_mapper_and_extract_tpl.py
+analysis_script/ood_results

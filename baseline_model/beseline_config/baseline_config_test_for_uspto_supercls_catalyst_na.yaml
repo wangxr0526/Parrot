@@ -1,7 +1,7 @@
 database_path: '../dataset/source_dataset/USPTO_condition_final'
 database_name: 'USPTO_condition'
 test_database_path: '../dataset/source_dataset/USPTO_condition_final'
-test_database_name: 'USPTO_condition_testset_catalyst_na'
+test_database_name: 'USPTO_condition_pred_category_testset_catalyst_na'
 using_super_class_to_test: true
 model_path: ./model
 model_name: 'baseline_train_1_USPTO_condition'

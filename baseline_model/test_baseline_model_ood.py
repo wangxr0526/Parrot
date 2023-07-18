@@ -115,7 +115,7 @@ def load_dataset_label(data_root, database_name, use_temperature=False):
     fps_dict = None
     return fps_dict, label_dict
 
-def caculate_accuracy_supercls(model, data_loader, device, condition2label, topk_rank_thres=None, save_topk_path=None, use_temperature=False, top_fname=None, super_class_dicts=None, topk_get=[1, 3, 5, 10, 15],condition_to_calculate=['c1', 's1', 's2', 'r1', 'r2']):
+def caculate_accuracy_supercls(model, data_loader, device, condition2label, label2condition,topk_rank_thres=None, save_topk_path=None, use_temperature=False, top_fname=None, super_class_dicts=None, topk_get=[1, 3, 5, 10, 15],condition_to_calculate=['c1', 's1', 's2', 'r1', 'r2']):
     print('Caculating topk accuracy...')
     if not topk_rank_thres:
         topk_rank_thres = {
@@ -227,7 +227,7 @@ def caculate_accuracy_supercls(model, data_loader, device, condition2label, topk
             one_batch_t_preds = []
 
             c1_preds = model.c1_func(fp_emb)
-            c1_scores, c1_cdts = c1_preds.squeeze().topk(topk_rank_thres['c1'])
+            c1_scores, c1_cdts = c1_preds.topk(topk_rank_thres['c1'])
             for c1_top in range(c1_cdts.size(-1)):
                 # if device != torch.device('cpu'):
                 #     pred_list = c1_cdts[:, c1_top].cpu().numpy().tolist()
@@ -244,7 +244,7 @@ def caculate_accuracy_supercls(model, data_loader, device, condition2label, topk
                     c1_pred, len(condition2label['catalyst1']))
 
                 s1_preds = model.s1_func(fp_emb, c1_input)
-                s1_scores, s1_cdts = s1_preds.squeeze().topk(
+                s1_scores, s1_cdts = s1_preds.topk(
                     topk_rank_thres['s1'])
                 for s1_top in range(s1_cdts.size(-1)):
                     # if device != torch.device('cpu'):
@@ -260,7 +260,7 @@ def caculate_accuracy_supercls(model, data_loader, device, condition2label, topk
                         s1_pred, len(condition2label['solvent1']))
 
                     s2_preds = model.s2_func(fp_emb, c1_input, s1_input)
-                    s2_scores, s2_cdts = s2_preds.squeeze().topk(
+                    s2_scores, s2_cdts = s2_preds.topk(
                         topk_rank_thres['s2'])
                     for s2_top in range(s2_cdts.size(-1)):
                         # if device != torch.device('cpu'):
@@ -278,7 +278,7 @@ def caculate_accuracy_supercls(model, data_loader, device, condition2label, topk
 
                         r1_preds = model.r1_func(
                             fp_emb, c1_input, s1_input, s2_input)
-                        r1_scores, r1_cdts = r1_preds.squeeze().topk(
+                        r1_scores, r1_cdts = r1_preds.topk(
                             topk_rank_thres['r1'])
                         for r1_top in range(r1_cdts.size(-1)):
                             # if device != torch.device('cpu'):
@@ -296,7 +296,7 @@ def caculate_accuracy_supercls(model, data_loader, device, condition2label, topk
 
                             r2_preds = model.r2_func(
                                 fp_emb, c1_input, s1_input, s2_input, r1_input)
-                            r2_scores, r2_cdts = r2_preds.squeeze().topk(
+                            r2_scores, r2_cdts = r2_preds.topk(
                                 topk_rank_thres['r2'])
                             for r2_top in range(r2_cdts.size(-1)):
                                 # if device != torch.device('cpu'):
@@ -322,7 +322,7 @@ def caculate_accuracy_supercls(model, data_loader, device, condition2label, topk
                                         r2_pred, len(condition2label['reagent2']))
                                     t_preds = model.T_func(
                                         fp_emb, c1_input, s1_input, s2_input, r1_input, r2_input)
-                                    t_preds = t_preds.squeeze()
+                                    t_preds = t_preds
                                     one_batch_t_preds.append(t_preds)
 
             one_batch_preds = torch.cat(
@@ -434,11 +434,11 @@ if __name__ == '__main__':
     # config = yaml.load(open('./beseline_config/baseline_config_test_for_ood_supercls_catalyst_na.yaml', "r"),
     #                    Loader=yaml.FullLoader)
 
-    config = yaml.load(open('./beseline_config/baseline_config_test_for_uspto_supercls_catalyst_na.yaml', "r"),
-                       Loader=yaml.FullLoader)
-
-    # config = yaml.load(open('./beseline_config/baseline_config_test_for_uspto_supercls_have_catalyst.yaml', "r"),
+    # config = yaml.load(open('./beseline_config/baseline_config_test_for_uspto_supercls_catalyst_na.yaml', "r"),
     #                    Loader=yaml.FullLoader)
+
+    config = yaml.load(open('./beseline_config/baseline_config_test_for_uspto_supercls_have_catalyst.yaml', "r"),
+                       Loader=yaml.FullLoader)
 
     device = torch.device('cuda:{}'.format(
         config['gpu'])) if config['gpu'] >= 0 else torch.device('cpu')
@@ -513,6 +513,7 @@ if __name__ == '__main__':
                             test_loader,
                             device=device,
                             condition2label=condition2label,
+                            label2condition=label2condition,
                             super_class_dicts=super_class_dicts,
                             topk_rank_thres=config['topk_rank_thres'] if 'topk_rank_thres' in config else {
                                 'c1': 2,

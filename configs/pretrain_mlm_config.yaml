@@ -1,4 +1,3 @@
-best_model_dir: ./outputs/bert_mlm_uspto_remapped
 config:
   architectures:
   - BertForMaskedLM
