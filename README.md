@@ -60,7 +60,7 @@ python preprocess_script/download_data.py
 ```
 The links correspond to the paths of the zip files as follows:
 ```
-https://drive.google.com/uc?id=1da6JD0CPC4dCuWSy0cOn5g9uby7jL9PI    --->    dataset/source_dataset/USPTO_condition_final.zip
+https://drive.google.com/uc?id=1aX70qzZrJ9TZ9KpqnvUVR8WBxiTwXOsI    --->    dataset/source_dataset/USPTO_condition_final.zip
 
 https://drive.google.com/uc?id=1uEqpkF4tPTlLIPdTyWJdXows7hKQbAAc    --->    dataset/pretrain_data.zip
 
