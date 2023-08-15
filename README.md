@@ -132,7 +132,7 @@ Support three input methods<br>
 ## Reproduce the results
 
 ### **[1]** Get Dataset
-The complete processed **USPTO-Condition**, **USPTO-Suzuki-Condition** and pretrain dataset after **USE Parrot** is already in `dataset/source_dataset/USPTO_condition_final`, `dataset/source_dataset/USPTO_suzuki_final` and `dataset/pretrain_data`, if you want to recreate the USPTO-Condition dataset, you can read [here](./preprocess_script/uspto_script/uspto_condition.md). If you want to use Reaxys-TotalSyn-Condition, you can only process it from scratch. We provide the ReaxysID of the data and the script for processing. For details, you can read [here](./preprocess_script/reaxys_script/reaxys_totalsyn_condition.md).The final `dataset` directory structure should be as follows:
+The complete processed **USPTO-Condition**, **USPTO-Suzuki-Condition** and pretrain dataset after **USE Parrot** is already in `dataset/source_dataset/USPTO_condition_final` and `dataset/pretrain_data`, if you want to recreate the USPTO-Condition dataset, you can read [here](./preprocess_script/uspto_script/uspto_condition.md). If you want to use Reaxys-TotalSyn-Condition, you can only process it from scratch. We provide the ReaxysID of the data and the script for processing. For details, you can read [here](./preprocess_script/reaxys_script/reaxys_totalsyn_condition.md).The final `dataset` directory structure should be as follows:
 ```
 dataset/
 ├── pretrain_data
@@ -145,23 +145,18 @@ dataset/
     │   ├── Reaxys_total_syn_condition.csv
     │   ├── Reaxys_total_syn_condition_alldata_idx.pkl
     │   └── Reaxys_total_syn_condition_condition_labels.pkl
-    ├── USPTO_condition_final
-    │   ├── canonical_pistachio_label.json
-    │   ├── condition_replace_dict_final.json
-    │   ├── USPTO_condition_alldata_idx.pkl
-    │   ├── USPTO_condition_aug_n5_alldata_idx.pkl
-    │   ├── USPTO_condition_aug_n5_condition_labels.pkl
-    │   ├── USPTO_condition_aug_n5.csv
-    │   ├── USPTO_condition_condition_labels.pkl
-    │   ├── USPTO_condition.csv
-    │   ├── USPTO_condition_pred_category.csv
-    │   └── USPTO_condition_pred_category_org.csv
-    └── USPTO_suzuki_final
-        ├── USPTO_suzuki_condition_alldata_idx.pkl
-        ├── USPTO_suzuki_condition_condition_labels.pkl
-        ├── USPTO_suzuki_condition.csv
-        ├── USPTO_suzuki_condition_translate_dict.json
-        └── USPTO_suzuki_dataset.csv
+    └── USPTO_condition_final
+        ├── canonical_pistachio_label.json
+        ├── condition_replace_dict_final.json
+        ├── USPTO_condition_alldata_idx.pkl
+        ├── USPTO_condition_aug_n5_alldata_idx.pkl
+        ├── USPTO_condition_aug_n5_condition_labels.pkl
+        ├── USPTO_condition_aug_n5.csv
+        ├── USPTO_condition_condition_labels.pkl
+        ├── USPTO_condition.csv
+        ├── USPTO_condition_pred_category.csv
+        └── USPTO_condition_pred_category_org.csv
+
 
 ```
 
