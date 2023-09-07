@@ -1,6 +1,8 @@
 # Parrot
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg) <br>
-Implementation of reaction condition prediction with Parrot<br><br>
+Implementation of reaction condition prediction with Parrot<br>
+Wang X, Hsieh CY, Yin X, Wang J, Li Y, Deng Y, Jiang D, Wu Z, Du H, Chen H, et al. Generic Interpretable Reaction Condition Predictions with Open Reaction Condition Datasets and Unsupervised Learning of Reaction Center. Research 2023;6:Article 0231. https://doi.org/10.34133/research.0231
+ <br><br>
 ![Parrot](./paper_data/figure/main-graph%20abstract.png)
 
 
