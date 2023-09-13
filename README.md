@@ -74,7 +74,7 @@ https://drive.google.com/uc?id=1DmHILXSOhUuAzqF0JmRTx1EcOOQ7Bm5O    --->    outp
 
 We provide two usage methods, one is to use the command line, and the other is through the web interface.
 ### Command
-Then prepare the txt file containing the SMILES of the responses you want to predict, and enter the following command:<br>
+Then prepare the txt file containing the SMILES of the reactions you want to predict, and enter the following command:<br>
 ```
 cd Parrot
 python inference.py --config_path path/to/config_file.yaml \
