@@ -21,7 +21,8 @@ Implementation of reaction condition prediction with Parrot<br><br>
     - [Test Parrot](#4-test-parrot)
 
 ## Publication
-Wang X, Hsieh CY, Yin X, Wang J, Li Y, Deng Y, Jiang D, Wu Z, Du H, Chen H, et al. Generic Interpretable Reaction Condition Predictions with Open Reaction Condition Datasets and Unsupervised Learning of Reaction Center. Research 2023;6:Article 0231. https://doi.org/10.34133/research.0231
+Xiaorui Wang, Chang-Yu Hsieh*, Xiaodan Yin, Jike Wang, Yuquan Li, Yafeng Deng, Dejun Jiang, Zhenxing Wu, Hongyan Du, Hongming Chen, Yun Li, Huanxiang Liu, Yuwei Wang, Pei Luo, 
+Tingjun Hou*, Xiaojun Yao*. Generic Interpretable Reaction Condition Predictions with Open Reaction Condition Datasets and Unsupervised Learning of Reaction Center. Research. 0;DOI:10.34133/research.0231
 
 ## Quickly Start From Gitpod
 About 4 minutes.<br>
