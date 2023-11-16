@@ -18,7 +18,8 @@ Implementation of reaction condition prediction with Parrot<br><br>
     - [Get Dataset](#1-get-dataset)
     - [Pretrain](#2-pretrain)
     - [Train Parrot](#3-train-parrot)
-    - [Test Parrot](#4-test-parrot)
+    - [Test Parrot](#4-test-parrotparrot)
+- [Cite Us](#cite-us)
 
 ## Publication
 Xiaorui Wang, Chang-Yu Hsieh*, Xiaodan Yin, Jike Wang, Yuquan Li, Yafeng Deng, Dejun Jiang, Zhenxing Wu, Hongyan Du, Hongming Chen, Yun Li, Huanxiang Liu, Yuwei Wang, Pei Luo, 
@@ -205,3 +206,19 @@ Test in the Reaxy-TotalSyn-Condition dataset:
     python test_parrot_model.py --gpu CUDA_ID \
                                 --config_path configs/config_reaxys_totalsyn_condition.yaml
     ```
+## Cite Us
+```
+@article{
+doi:10.34133/research.0231,
+author = {Xiaorui Wang  and Chang-Yu Hsieh  and Xiaodan Yin  and Jike Wang  and Yuquan Li  and Yafeng Deng  and Dejun Jiang  and Zhenxing Wu  and Hongyan Du  and Hongming Chen  and Yun Li  and Huanxiang Liu  and Yuwei Wang  and Pei Luo  and Tingjun Hou  and Xiaojun Yao },
+title = {Generic Interpretable Reaction Condition Predictions with Open Reaction Condition Datasets and Unsupervised Learning of Reaction Center},
+journal = {Research},
+volume = {6},
+pages = {0231},
+year = {2023},
+doi = {10.34133/research.0231},
+URL = {https://spj.science.org/doi/abs/10.34133/research.0231},
+eprint = {https://spj.science.org/doi/pdf/10.34133/research.0231},
+}
+
+```
