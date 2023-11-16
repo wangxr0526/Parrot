@@ -220,5 +220,4 @@ doi = {10.34133/research.0231},
 URL = {https://spj.science.org/doi/abs/10.34133/research.0231},
 eprint = {https://spj.science.org/doi/pdf/10.34133/research.0231},
 }
-
 ```
